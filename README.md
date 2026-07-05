@@ -1,5 +1,40 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## 静岡駅 喫煙所検索プロトタイプ
+
+`/smoking` にアクセスすると、静岡駅周辺半径1000m以内のコンビニ・飲食店をGoogle Places APIで検索し、口コミをClaudeで解析して喫煙可否を地図上に表示します。ダミーデータは使用せず、毎回APIから直接取得します。
+
+### 事前準備
+
+1. `.env.local.example` を `.env.local` にコピーし、キーを設定する。
+   - `GOOGLE_MAPS_API_KEY` / `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`: Google Cloud で **Places API** と **Maps JavaScript API** を有効化して取得。`NEXT_PUBLIC_*` はブラウザに露出するため、HTTPリファラー制限を設定すること。
+   - `ANTHROPIC_API_KEY`: Anthropic Consoleで発行したAPIキー。
+2. `npm install`（インストール済みであれば不要）。
+3. `npm run dev` で起動し、`http://localhost:3000/smoking` を開く。
+
+### 実装箇所
+
+- `app/api/smoking-spots/route.ts`: Nearby Search → Place Details（口コミ取得）→ Claude（口コミから喫煙可否をツール呼び出しで抽出）の順に処理し、結果をJSONで返すAPI Route。
+- `app/smoking/page.tsx`: Google Maps JS APIをスクリプトタグで読み込み、マーカー色分け（緑=紙タバコOK / 青=電子タバコ限定 / 黄=コンビニ店外灰皿あり）とサイドバー一覧を表示するクライアントコンポーネント。
+
+## 便利マップ（venuesテーブル）
+
+Supabaseの `venues` テーブルに登録した店舗・施設（喫煙所、インボイス対応カフェ、コインランドリー、ジムなど）を、市町村・カテゴリで絞り込んで返すAPI。
+
+### 事前準備
+
+1. Supabaseプロジェクトで `supabase/migrations/0001_create_venues_table.sql` → `0002_add_location_gist_index.sql` の順にSQLを実行する（Supabase SQL Editor、または `supabase db push`）。
+2. `.env.local` に以下を設定する（サービスロールキーは秘匿情報のためブラウザに公開しないこと）。
+   - `SUPABASE_URL`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+
+### 実装箇所
+
+- `supabase/migrations/0001_create_venues_table.sql`: `venues` テーブル定義（`category` は `smoking` / `invoice-cafe` / `laundry` / `gym` のCHECK制約付き）。
+- `supabase/migrations/0002_add_location_gist_index.sql`: `cube` / `earthdistance` 拡張を使い、緯度経度に対するGiSTインデックスを追加（半径検索を高速化）。
+- `lib/supabaseClient.ts`: サービスロールキーでSupabaseに接続するサーバー専用クライアント。
+- `app/api/locations/route.ts`: `?city=` `&category=` クエリで `venues` を絞り込み取得するAPI Route。`category` は許可された値以外だと400を返す。
+
 ## Getting Started
 
 First, run the development server:
