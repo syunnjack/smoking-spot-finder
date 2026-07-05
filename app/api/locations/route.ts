@@ -1,23 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabaseClient";
-import { VENUE_CATEGORIES, type Venue, type VenueCategory } from "@/lib/types";
-
-function isVenueCategory(value: string): value is VenueCategory {
-  return (VENUE_CATEGORIES as readonly string[]).includes(value);
-}
-
-// Supabaseはjsonb列を通常オブジェクトとして返すが、文字列で返るドライバ/経路にも耐えられるようにする。
-function parseMetadata(raw: unknown): Record<string, unknown> {
-  if (raw && typeof raw === "object") return raw as Record<string, unknown>;
-  if (typeof raw === "string") {
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return {};
-    }
-  }
-  return {};
-}
+import {
+  VENUE_CATEGORIES,
+  isVenueCategory,
+  parseVenueMetadata,
+  type Venue,
+} from "@/lib/types";
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -74,7 +62,7 @@ export async function GET(request: NextRequest) {
       city: row.city,
       prefecture: row.prefecture,
       category: row.category,
-      metadata: parseMetadata(row.metadata),
+      metadata: parseVenueMetadata(row.metadata),
       created_at: row.created_at,
     }));
 

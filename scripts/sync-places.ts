@@ -10,7 +10,7 @@
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { VENUE_CATEGORIES, type VenueCategory } from "@/lib/types";
+import { VENUE_CATEGORIES, type VenueCategory, type SmokingMetadata } from "@/lib/types";
 
 try {
   process.loadEnvFile(".env.local");
@@ -51,12 +51,7 @@ const SMOKING_ANALYSIS_SYSTEM_PROMPT =
   "- has_outdoor_ashtray (true/false)\n" +
   "- text_proof (クチコミ内から、この状態を裏付ける具体的な日本語の一文をそのまま抽出してください)";
 
-interface SmokingAnalysis {
-  allows_paper_cigarettes: boolean;
-  allows_electronic_cigarettes_only: boolean;
-  has_outdoor_ashtray: boolean;
-  text_proof: string;
-}
+type SmokingAnalysis = SmokingMetadata;
 
 const FALLBACK_ANALYSIS: SmokingAnalysis = {
   allows_paper_cigarettes: false,
