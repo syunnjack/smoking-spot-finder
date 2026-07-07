@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { headers } from "next/headers";
 import Link from "next/link";
 import { getSupabaseServerClient } from "@/lib/supabaseClient";
 import {
@@ -14,6 +13,10 @@ import {
 } from "@/lib/types";
 import { findOrdinance } from "@/lib/streetSmokingOrdinances";
 import VenueExplorer from "./VenueExplorer";
+
+// 5分間はVercelのエッジキャッシュから即座に返し、毎回Supabaseへ問い合わせない（画面遷移の高速化）。
+// sync-places/import-opendataの更新はこの間隔で反映されれば十分なため許容している。
+export const revalidate = 300;
 
 interface RouteParams {
   prefecture: string;
@@ -41,11 +44,10 @@ async function resolveRouteParams(params: Promise<RouteParams>) {
   };
 }
 
-async function resolveBaseUrl(): Promise<string> {
-  const requestHeaders = await headers();
-  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "localhost:3000";
-  const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  return `${protocol}://${host}`;
+// headers()を読むと全リクエストが強制的に動的レンダリングになりISRが効かなくなるため、
+// 本番ドメインが確定した後は環境変数から組み立てる（sitemap.ts/robots.tsと同じ方式）。
+function resolveBaseUrl(): string {
+  return process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 }
 
 async function fetchVenues(prefecture: string, city: string, category: VenueCategory): Promise<Venue[]> {
@@ -277,7 +279,7 @@ export async function generateMetadata({
   const title = `${city}（${prefecture}）で${label}を探す`;
   const description = `${prefecture}${city}周辺の${label}を、AIによる口コミ解析付きの地図とリストで検索できます。`;
 
-  const baseUrl = await resolveBaseUrl();
+  const baseUrl = resolveBaseUrl();
   const path = `/${encodeURIComponent(prefecture)}/${encodeURIComponent(city)}/${encodeURIComponent(category)}`;
   const url = `${baseUrl}${path}`;
 
@@ -306,14 +308,17 @@ export default async function VenueCategoryPage({
     notFound();
   }
 
-  const venues = await fetchVenues(prefecture, city, category);
-  const baseUrl = await resolveBaseUrl();
+  // 互いに依存しないSupabaseクエリは並列実行し、往復回数分の待ち時間を減らす。
+  const [venues, nearbyAreas] = await Promise.all([
+    fetchVenues(prefecture, city, category),
+    fetchNearbyAreas(prefecture, city, category),
+  ]);
+  const baseUrl = resolveBaseUrl();
   const path = `/${encodeURIComponent(prefecture)}/${encodeURIComponent(city)}/${encodeURIComponent(category)}`;
   const pageUrl = `${baseUrl}${path}`;
   const jsonLd = buildJsonLd({ prefecture, city, category, venues, pageUrl, baseUrl });
   const label = CATEGORY_LABELS[category];
 
-  const nearbyAreas = await fetchNearbyAreas(prefecture, city, category);
   const lastUpdated = venues.reduce<string | null>((latest, venue) => {
     if (!venue.updated_at) return latest;
     return !latest || venue.updated_at > latest ? venue.updated_at : latest;
@@ -336,6 +341,7 @@ export default async function VenueCategoryPage({
         category={category}
         areaLabel={`${prefecture} ${city} — ${label}`}
         googleMapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
+        ordinance={ordinance}
       />
 
       <footer className="mx-auto max-w-3xl px-6 py-12">
@@ -364,7 +370,7 @@ export default async function VenueCategoryPage({
         </div>
 
         {ordinance && (
-          <section className="mt-10 rounded-lg border border-amber-200 bg-amber-50 p-5">
+          <section id="ordinance-details" className="mt-10 scroll-mt-4 rounded-lg border border-amber-200 bg-amber-50 p-5">
             <h2 className="text-lg font-bold text-gray-900">路上喫煙防止条例について</h2>
             <p className="mt-2 text-sm text-gray-700">
               {prefecture}{city}には<span className="font-medium">{ordinance.ordinanceName}</span>があります。

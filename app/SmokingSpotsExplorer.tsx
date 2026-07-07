@@ -264,8 +264,24 @@ export default function SmokingSpotsExplorer({
         </ul>
       </aside>
 
-      <main className="order-1 h-1/2 w-full md:order-2 md:h-full md:flex-1">
+      <main className="relative order-1 h-1/2 w-full md:order-2 md:h-full md:flex-1">
         <div ref={mapDivRef} className="h-full w-full" />
+        <div className="absolute bottom-4 left-4 z-10 rounded-lg bg-white/95 px-3 py-2 text-xs text-gray-700 shadow-md backdrop-blur">
+          <div className="flex flex-wrap gap-x-3 gap-y-1">
+            <span className="flex items-center gap-1">
+              <span className="h-2.5 w-2.5 rounded-full bg-green-500" />紙タバコOK
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />電子タバコ限定
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-2.5 w-2.5 rounded-full bg-yellow-500" />店外灰皿あり
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-2.5 w-2.5 rounded-full bg-gray-400" />情報なし
+            </span>
+          </div>
+        </div>
       </main>
     </div>
   );

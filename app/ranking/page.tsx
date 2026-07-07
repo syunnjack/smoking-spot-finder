@@ -3,7 +3,8 @@ import Link from "next/link";
 import { getSupabaseServerClient } from "@/lib/supabaseClient";
 import { isSmokingMetadata, parseVenueMetadata } from "@/lib/types";
 
-export const dynamic = "force-dynamic";
+// 5分間はエッジキャッシュから返し、毎回全件集計をやり直さない（画面遷移の高速化）。
+export const revalidate = 300;
 
 export const metadata: Metadata = {
   title: "喫煙所充実度ランキング｜市区町村別",

@@ -7,6 +7,7 @@ import type { Venue, VenueCategory } from "@/lib/types";
 import { isSmokingMetadata, isUnknownProof, looksLikeConvenienceStore } from "@/lib/types";
 import { loadGoogleMapsScript } from "@/lib/loadGoogleMapsScript";
 import { useFavorites } from "@/lib/useFavorites";
+import type { StreetSmokingOrdinance } from "@/lib/streetSmokingOrdinances";
 
 // アフィリエイト導線。
 // 「PR」表記は景品表示法のステルスマーケティング規制（2023年10月施行）対応のため、
@@ -189,6 +190,7 @@ interface VenueExplorerProps {
   category: VenueCategory;
   areaLabel: string;
   googleMapsApiKey: string | undefined;
+  ordinance?: StreetSmokingOrdinance | null;
 }
 
 export default function VenueExplorer({
@@ -196,6 +198,7 @@ export default function VenueExplorer({
   category,
   areaLabel,
   googleMapsApiKey,
+  ordinance,
 }: VenueExplorerProps) {
   const mapDivRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -319,6 +322,17 @@ export default function VenueExplorer({
           ← トップに戻る
         </Link>
       </div>
+      {ordinance && (
+        <a
+          href="#ordinance-details"
+          className="flex shrink-0 items-center gap-2 border-b border-amber-300 bg-amber-100 px-4 py-2 text-xs font-medium text-amber-900 hover:bg-amber-200 sm:text-sm"
+        >
+          <span aria-hidden className="text-base">⚠️</span>
+          <span>
+            このエリアには<strong>路上喫煙防止条例</strong>があります(違反で{ordinance.fine})。詳しく見る ↓
+          </span>
+        </a>
+      )}
       <div className="flex flex-wrap gap-2 border-b border-gray-200 bg-white px-4 py-3">
         {category === "smoking" &&
           SMOKING_FILTERS.map((filter) => {
@@ -488,8 +502,26 @@ export default function VenueExplorer({
           </ul>
         </aside>
 
-        <main className="order-1 h-1/2 w-full md:order-2 md:h-full md:flex-1">
+        <main className="relative order-1 h-1/2 w-full md:order-2 md:h-full md:flex-1">
           <div ref={mapDivRef} className="h-full w-full" />
+          {category === "smoking" && (
+            <div className="absolute bottom-4 left-4 z-10 rounded-lg bg-white/95 px-3 py-2 text-xs text-gray-700 shadow-md backdrop-blur">
+              <div className="flex flex-wrap gap-x-3 gap-y-1">
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-green-500" />紙タバコOK
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />電子タバコ限定
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-yellow-500" />店外灰皿あり
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-gray-400" />情報なし
+                </span>
+              </div>
+            </div>
+          )}
         </main>
       </div>
     </div>

@@ -3,8 +3,9 @@ import { getSupabaseServerClient } from "@/lib/supabaseClient";
 import { CATEGORY_LABELS, type VenueCategory } from "@/lib/types";
 
 // llms.txt: LLMクローラー（ChatGPT検索・Perplexity等）向けにサイト構造を要約するための慣習的ファイル。
-// https://llmstxt.org/ 参照。エリアはsync-places/import-opendataで随時増えるため動的に生成する。
-export const dynamic = "force-dynamic";
+// https://llmstxt.org/ 参照。エリアはsync-places/import-opendataで随時増えるため、
+// 5分間だけエッジキャッシュしつつ定期的に再生成する。
+export const revalidate = 300;
 
 function resolveBaseUrl(): string {
   return process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";

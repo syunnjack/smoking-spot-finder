@@ -2,9 +2,9 @@ import { getSupabaseServerClient } from "@/lib/supabaseClient";
 import { REGION_ORDER, regionForPrefecture } from "@/lib/types";
 import HomeClient from "./HomeClient";
 
-// エリア一覧はsync-places/import-opendataの実行で随時増えるため、ビルド時の静的化はせず
-// 他ページ（/[prefecture]/[city]/[category]など）と同様に毎回Supabaseを見に行く。
-export const dynamic = "force-dynamic";
+// エリア一覧はsync-places/import-opendataの実行で随時増えるが、毎回Supabaseに問い合わせるのは
+// 画面遷移が遅くなる原因になるため、5分間はエッジキャッシュから返す。
+export const revalidate = 300;
 
 interface Area {
   prefecture: string;
