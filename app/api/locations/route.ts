@@ -64,6 +64,7 @@ export async function GET(request: NextRequest) {
       category: row.category,
       metadata: parseVenueMetadata(row.metadata),
       created_at: row.created_at,
+      updated_at: row.updated_at,
     }));
 
     return NextResponse.json({ venues });

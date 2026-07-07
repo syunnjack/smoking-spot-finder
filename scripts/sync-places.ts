@@ -139,13 +139,16 @@ async function fetchPlaceDetails(
   apiKey: string,
   placeId: string
 ): Promise<PlaceDetailsResult> {
-  const response = await fetch(`${PLACES_DETAILS_URL}/${placeId}`, {
-    headers: {
-      "X-Goog-Api-Key": apiKey,
-      "X-Goog-FieldMask":
-        "id,displayName,formattedAddress,location,addressComponents,reviews",
-    },
-  });
+  const response = await fetch(
+    `${PLACES_DETAILS_URL}/${placeId}?languageCode=ja&regionCode=JP`,
+    {
+      headers: {
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask":
+          "id,displayName,formattedAddress,location,addressComponents,reviews",
+      },
+    }
+  );
 
   if (!response.ok) {
     const body = await response.text().catch(() => "");
@@ -239,6 +242,18 @@ async function processPlace(
       return { placeId: place.id, status: "skipped", detail: "座標が取得できませんでした" };
     }
 
+    // Google Places Text Searchは検索語に対する緩い関連度検索であり、指定した市町村と
+    // 無関係な場所が結果に混ざることがある（実際に発生: 「横浜市」で検索して静岡市の店舗がヒットした）。
+    // 住所に検索対象の市町村名が含まれない結果は保存せず、既存データの city 誤上書きを防ぐ。
+    const address = details.formattedAddress ?? place.formattedAddress ?? null;
+    if (!address || !address.includes(city)) {
+      return {
+        placeId: place.id,
+        status: "skipped",
+        detail: `住所が検索対象の市町村と一致しません（address: ${address ?? "不明"}）`,
+      };
+    }
+
     const reviewTexts = (details.reviews ?? [])
       .slice(0, MAX_REVIEWS_PER_PLACE)
       .map((review) => review.text?.text)
@@ -252,12 +267,13 @@ async function processPlace(
         name,
         latitude,
         longitude,
-        address: details.formattedAddress ?? place.formattedAddress ?? null,
+        address,
         google_place_id: place.id,
         city,
         prefecture: extractPrefecture(details),
         category,
         metadata: analysis,
+        updated_at: new Date().toISOString(),
       },
       { onConflict: "google_place_id" }
     );

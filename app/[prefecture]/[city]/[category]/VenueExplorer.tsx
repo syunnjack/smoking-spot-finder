@@ -1,9 +1,116 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { MarkerClusterer } from "@googlemaps/markerclusterer";
 import type { Venue, VenueCategory } from "@/lib/types";
-import { isSmokingMetadata } from "@/lib/types";
+import { isSmokingMetadata, isUnknownProof, looksLikeConvenienceStore } from "@/lib/types";
 import { loadGoogleMapsScript } from "@/lib/loadGoogleMapsScript";
+import { useFavorites } from "@/lib/useFavorites";
+
+// アフィリエイト導線。
+// 「PR」表記は景品表示法のステルスマーケティング規制（2023年10月施行）対応のため、
+// リンク差し替え後も必ず残すこと。
+// 楽天アフィリエイト（使い捨て携帯灰皿, pandainterior/pan-yhg01）
+const RAKUTEN_ASHTRAY_SEARCH_URL =
+  "https://hb.afl.rakuten.co.jp/ichiba/558fbb4b.d3ca1d3b.558fbb4c.404f01bf/?pc=https%3A%2F%2Fitem.rakuten.co.jp%2Fpandainterior%2Fpan-yhg01%2F&link_type=hybrid_url&ut=eyJwYWdlIjoiaXRlbSIsInR5cGUiOiJoeWJyaWRfdXJsIiwic2l6ZSI6IjEwMHgxMDAiLCJuYW0iOjEsIm5hbXAiOiJyaWdodCIsImNvbSI6MSwiY29tcCI6ImRvd24iLCJwcmljZSI6MSwiYm9yIjoxLCJjb2wiOjEsImJidG4iOjEsInByb2QiOjAsImFtcCI6ZmFsc2V9";
+// たばこ事業法上、加熱式・電子タバコ機器も20歳未満への広告訴求は禁止されているため、
+// 「臭い・煙が完全になくなる」等の効果効能を示唆する表現は使わず、年齢表記も必須で残すこと。
+// 楽天アフィリエイト（IQOS互換の加熱式タバコデバイス「Fasoul Q1」, flavor-kitchen/4023101）
+const VAPE_SEARCH_URL =
+  "https://hb.afl.rakuten.co.jp/ichiba/558fb5f7.73737464.558fb5f8.036a5b1b/?pc=https%3A%2F%2Fitem.rakuten.co.jp%2Fflavor-kitchen%2F4023101%2F&link_type=hybrid_url&ut=eyJwYWdlIjoiaXRlbSIsInR5cGUiOiJoeWJyaWRfdXJsIiwic2l6ZSI6IjI0MHgyNDAiLCJuYW0iOjEsIm5hbXAiOiJyaWdodCIsImNvbSI6MSwiY29tcCI6ImRvd24iLCJwcmljZSI6MSwiYm9yIjoxLCJjb2wiOjEsImJidG4iOjEsInByb2QiOjAsImFtcCI6ZmFsc2V9";
+
+// バリューコマース経由の飲食店予約導線は食べログを採用（ホットペッパーグルメは提携申請の承認待ちのため、
+// 即時提携できる食べログのMyLinkを先行して使う）。MyLinkは店舗ごとの個別リンクのため、
+// 店名で完全一致した店舗にだけ表示する（未掲載店舗にはリンク切れ防止のため出さない）。
+// 今後MyLinkが増え次第、このマップに追記していく。
+interface RestaurantMyLink {
+  href: string;
+  pixelSrc: string;
+}
+
+// バリューコマースの食べログプログラム（sid/pidは全店共通、vc_urlだけ店舗ごとに変わる）。
+const VALUECOMMERCE_SID = 3771711;
+const VALUECOMMERCE_TABELOG_PID = 892653767;
+
+function tabelogMyLink(tabelogUrl: string): RestaurantMyLink {
+  return {
+    href: `https://ck.jp.ap.valuecommerce.com/servlet/referral?sid=${VALUECOMMERCE_SID}&pid=${VALUECOMMERCE_TABELOG_PID}&vc_url=${encodeURIComponent(tabelogUrl)}`,
+    pixelSrc: `https://ad.jp.ap.valuecommerce.com/servlet/gifbanner?sid=${VALUECOMMERCE_SID}&pid=${VALUECOMMERCE_TABELOG_PID}`,
+  };
+}
+
+const TABELOG_MYLINKS: Record<string, RestaurantMyLink> = {
+  "やよい軒 静岡ＳＢＳ通り店": tabelogMyLink("https://tabelog.com/shizuoka/A2201/A220101/22045016/"),
+  "サイゼリヤ 静岡アスティ店": tabelogMyLink("https://tabelog.com/shizuoka/A2201/A220101/22022000/"),
+  "おにおん": tabelogMyLink("https://tabelog.com/shizuoka/A2201/A220101/22009673/"),
+  "こもれび食堂": tabelogMyLink("https://tabelog.com/shizuoka/A2201/A220101/22029031/"),
+  "ジョニーとスミス": tabelogMyLink("https://tabelog.com/shizuoka/A2201/A220101/22027709/"),
+  "チョンマゲ食堂（自家製手打ち蕎麦・ 天ぷら・ 炭火焼・ 居酒屋）": tabelogMyLink(
+    "https://tabelog.com/shizuoka/A2201/A220101/22033679/"
+  ),
+  "ハル": tabelogMyLink("https://tabelog.com/shizuoka/A2201/A220101/22030720/"),
+  "ひとつぼし食堂": tabelogMyLink("https://tabelog.com/shizuoka/A2201/A220101/22035269/"),
+  "ひょうたんや": tabelogMyLink("https://tabelog.com/shizuoka/A2201/A220101/22001641/"),
+  "ファミリー食堂さいとう": tabelogMyLink("https://tabelog.com/shizuoka/A2201/A220101/22000764/"),
+  "むらこし食堂": tabelogMyLink("https://tabelog.com/shizuoka/A2201/A220101/22011513/"),
+  "ゆで太郎 静岡インター通り店": tabelogMyLink("https://tabelog.com/shizuoka/A2201/A220101/22032574/"),
+  "十千花前": tabelogMyLink("https://tabelog.com/shizuoka/A2201/A220101/22001861/"),
+  "大衆食堂 定食のまる大 静岡北口店": tabelogMyLink("https://tabelog.com/shizuoka/A2201/A220101/22038814/"),
+  "家康食堂": tabelogMyLink("https://tabelog.com/shizuoka/A2201/A220102/22040674/"),
+  "旬魚菜 海どん": tabelogMyLink("https://tabelog.com/shizuoka/A2201/A220101/22029069/"),
+  "朝までダイニング SHIRUSHI": tabelogMyLink("https://tabelog.com/shizuoka/A2201/A220101/22033623/"),
+  "清水港みなみ": tabelogMyLink("https://tabelog.com/shizuoka/A2201/A220101/22016103/"),
+  "食堂 一二三 ヒフミ": tabelogMyLink("https://tabelog.com/shizuoka/A2201/A220101/22027482/"),
+  "どん": tabelogMyLink("https://tabelog.com/shizuoka/A2201/A220101/22011273/"),
+};
+
+// TABELOG_MYLINKSに個別登録が無い店舗向けのフォールバック。
+// 食べログの実際の検索フォーム（sa=エリア, sk=キーワード, https://tabelog.com/rst/rstsearch/）から
+// 決定的にURLを組み立てる。店名+市区町村さえあれば追加の検索・手動登録なしで全国どの店にも
+// 機械的にリンクを張れるため、TABELOG_MYLINKSのような個別対応をスケールさせずに済む。
+// 検索結果ページへの遷移になるため、個別ページへ直接飛ぶMyLinkよりは精度が落ちる。
+function tabelogSearchMyLink(venueName: string, city: string | null): RestaurantMyLink {
+  const searchUrl = `https://tabelog.com/rst/rstsearch/?sa=${encodeURIComponent(
+    city ?? ""
+  )}&sk=${encodeURIComponent(venueName)}`;
+  return tabelogMyLink(searchUrl);
+}
+
+function AffiliateSlot({
+  href,
+  label,
+  note,
+  pixelSrc,
+}: {
+  href: string;
+  label: string;
+  note?: string;
+  pixelSrc?: string;
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer nofollow sponsored"
+      onClick={(event) => event.stopPropagation()}
+      className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900 transition hover:bg-amber-100"
+    >
+      <span className="mt-0.5 shrink-0 rounded bg-amber-200 px-1 py-0.5 text-[10px] font-bold tracking-wide text-amber-800">
+        PR
+      </span>
+      <span>
+        {label}
+        {note && <span className="mt-0.5 block text-[10px] font-normal text-amber-700">{note}</span>}
+      </span>
+      {/* ASP側のインプレッション計測用ピクセル（成果測定用、クリック計測はhref自体で行われる） */}
+      {pixelSrc && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={pixelSrc} width={0} height={1} alt="" className="hidden" />
+      )}
+    </a>
+  );
+}
 
 const DEFAULT_CENTER = { lat: 35.681236, lng: 139.767125 }; // 東京駅（フォールバック用）
 
@@ -38,6 +145,8 @@ const SMOKING_FILTERS: Array<{
   },
 ];
 
+// Claudeが口コミから根拠を見つけられなかった場合に "<UNKNOWN>" 等のプレースホルダーを
+// text_proof にそのまま返すことがあるため、UI表示前にその状態を判定する。
 function markerColorFor(venue: Venue): string {
   const metadata = venue.metadata;
   if (!isSmokingMetadata(metadata)) return MARKER_COLORS.none;
@@ -56,6 +165,14 @@ function markerIcon(color: string): google.maps.Symbol {
     strokeWeight: 2,
     scale: 10,
   };
+}
+
+const RECENT_UPDATE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+// クチコミ提供・再取得で更新された店舗を「更新」バッジで可視化し、情報提供のモチベーションにつなげる。
+function isRecentlyUpdated(venue: Venue): boolean {
+  if (!venue.updated_at) return false;
+  return Date.now() - new Date(venue.updated_at).getTime() <= RECENT_UPDATE_WINDOW_MS;
 }
 
 function computeCenter(venues: Venue[]): { lat: number; lng: number } {
@@ -84,6 +201,7 @@ export default function VenueExplorer({
   const mapRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<Record<string, google.maps.Marker>>({});
   const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
+  const clustererRef = useRef<MarkerClusterer | null>(null);
 
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(
@@ -91,6 +209,8 @@ export default function VenueExplorer({
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeFilters, setActiveFilters] = useState<Set<SmokingFilterKey>>(new Set());
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const { toggleFavorite, isFavorite } = useFavorites();
 
   useEffect(() => {
     if (!googleMapsApiKey || !mapDivRef.current) return;
@@ -122,12 +242,21 @@ export default function VenueExplorer({
   }, []);
 
   const filteredVenues = useMemo(() => {
-    if (category !== "smoking" || activeFilters.size === 0) return venues;
-    const activeMatchers = SMOKING_FILTERS.filter((f) => activeFilters.has(f.key));
-    return venues.filter((venue) =>
-      activeMatchers.some((f) => f.matches(venue.metadata))
-    );
-  }, [venues, category, activeFilters]);
+    let result = venues;
+    if (category === "smoking" && activeFilters.size > 0) {
+      const activeMatchers = SMOKING_FILTERS.filter((f) => activeFilters.has(f.key));
+      result = result.filter((venue) => activeMatchers.some((f) => f.matches(venue.metadata)));
+    }
+    if (favoritesOnly) {
+      result = result.filter((venue) => isFavorite(venue.id));
+    }
+    return result;
+  }, [venues, category, activeFilters, favoritesOnly, isFavorite]);
+
+  const recentlyUpdatedCount = useMemo(
+    () => venues.filter(isRecentlyUpdated).length,
+    [venues]
+  );
 
   const focusVenue = useCallback((venue: Venue) => {
     setSelectedId(venue.id);
@@ -137,11 +266,20 @@ export default function VenueExplorer({
     map.panTo({ lat: venue.latitude, lng: venue.longitude });
     map.setZoom(18);
     const metadata = venue.metadata;
-    const proof = isSmokingMetadata(metadata) ? metadata.text_proof : null;
+    const isSmoking = isSmokingMetadata(metadata);
+    const proof = isSmoking ? metadata.text_proof : null;
+    const proofUnknown = isSmoking && isUnknownProof(metadata.text_proof);
+    const reviewUrl = `https://search.google.com/local/writereview?placeid=${venue.google_place_id}`;
     infoWindowRef.current?.setContent(
       `<div style="font-family: sans-serif; max-width: 220px;">
         <p style="font-weight: 600; margin-bottom: 4px;">${venue.name}</p>
-        ${proof ? `<p style="font-size: 12px; color: #374151;">${proof}</p>` : ""}
+        ${
+          proofUnknown
+            ? `<p style="font-size: 12px; color: #6b7280;">喫煙可否: 不明<br /><a href="${reviewUrl}" target="_blank" rel="noopener noreferrer" style="color: #4f46e5;">Googleマップのクチコミで教える →</a></p>`
+            : proof
+              ? `<p style="font-size: 12px; color: #374151;">${proof}</p>`
+              : ""
+        }
       </div>`
     );
     infoWindowRef.current?.open({ map, anchor: marker });
@@ -150,26 +288,40 @@ export default function VenueExplorer({
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
 
+    clustererRef.current?.clearMarkers();
     Object.values(markersRef.current).forEach((marker) => marker.setMap(null));
     markersRef.current = {};
 
-    filteredVenues.forEach((venue) => {
+    const markers = filteredVenues.map((venue) => {
       const marker = new google.maps.Marker({
         position: { lat: venue.latitude, lng: venue.longitude },
-        map: mapRef.current!,
         title: venue.name,
         icon: markerIcon(markerColorFor(venue)),
       });
       marker.addListener("click", () => focusVenue(venue));
       markersRef.current[venue.id] = marker;
+      return marker;
     });
+
+    if (!clustererRef.current) {
+      clustererRef.current = new MarkerClusterer({ map: mapRef.current });
+    }
+    clustererRef.current.addMarkers(markers);
   }, [mapReady, filteredVenues, focusVenue]);
 
   return (
     <div className="flex h-screen w-full flex-col bg-gray-50">
-      {category === "smoking" && (
-        <div className="flex flex-wrap gap-2 border-b border-gray-200 bg-white px-4 py-3">
-          {SMOKING_FILTERS.map((filter) => {
+      <div className="flex shrink-0 items-center border-b border-gray-200 bg-white px-4 py-2">
+        <Link
+          href="/"
+          className="rounded-full px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100"
+        >
+          ← トップに戻る
+        </Link>
+      </div>
+      <div className="flex flex-wrap gap-2 border-b border-gray-200 bg-white px-4 py-3">
+        {category === "smoking" &&
+          SMOKING_FILTERS.map((filter) => {
             const active = activeFilters.has(filter.key);
             return (
               <button
@@ -187,14 +339,32 @@ export default function VenueExplorer({
               </button>
             );
           })}
-        </div>
-      )}
+        <button
+          type="button"
+          onClick={() => setFavoritesOnly((prev) => !prev)}
+          aria-pressed={favoritesOnly}
+          className={`rounded-full border px-4 py-1.5 text-sm font-medium transition ${
+            favoritesOnly
+              ? "border-rose-500 bg-rose-500 text-white"
+              : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+          }`}
+        >
+          ♥ お気に入りのみ
+        </button>
+      </div>
 
       <div className="flex flex-1 flex-col overflow-hidden md:flex-row">
         <aside className="order-2 flex h-1/2 w-full flex-col overflow-y-auto border-t border-gray-200 bg-white md:order-1 md:h-full md:w-96 md:border-r md:border-t-0">
           <div className="border-b border-gray-200 px-5 py-4">
             <h1 className="text-lg font-bold text-gray-900">{areaLabel}</h1>
-            <p className="mt-1 text-xs text-gray-500">{filteredVenues.length}件の店舗・施設</p>
+            <p className="mt-1 text-xs text-gray-500">
+              {filteredVenues.length}件の店舗・施設
+              {recentlyUpdatedCount > 0 && (
+                <span className="ml-2 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                  直近7日で{recentlyUpdatedCount}件更新
+                </span>
+              )}
+            </p>
           </div>
 
           {mapError && <p className="px-5 py-4 text-sm text-red-600">{mapError}</p>}
@@ -207,13 +377,35 @@ export default function VenueExplorer({
           <ul className="flex-1 divide-y divide-gray-100">
             {filteredVenues.map((venue) => {
               const metadata = venue.metadata;
-              const proof = isSmokingMetadata(metadata) ? metadata.text_proof : null;
+              const isSmoking = isSmokingMetadata(metadata);
+              const proof = isSmoking ? metadata.text_proof : null;
+              const proofUnknown = isSmoking && isUnknownProof(metadata.text_proof);
+              const showAshtrayAffiliate = isSmoking && metadata.has_outdoor_ashtray;
+              // venuesテーブルは店舗種別を持たないため名称から簡易推定。公園はどちらの導線にも該当しない。
+              const isPark = venue.name.includes("公園");
+              const isRestaurantLike = isSmoking && !isPark && !looksLikeConvenienceStore(venue.name);
+              const curatedTabelogLink = TABELOG_MYLINKS[venue.name];
+              const tabelogLink = isRestaurantLike
+                ? (curatedTabelogLink ?? tabelogSearchMyLink(venue.name, venue.city))
+                : undefined;
+              const showVapeAffiliate = isSmoking && metadata.allows_electronic_cigarettes_only;
               return (
-                <li key={venue.id}>
+                <li key={venue.id} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => toggleFavorite(venue.id)}
+                    aria-pressed={isFavorite(venue.id)}
+                    aria-label="お気に入りに登録"
+                    className={`absolute right-3 top-3 text-lg leading-none transition hover:scale-110 ${
+                      isFavorite(venue.id) ? "text-rose-500" : "text-gray-300"
+                    }`}
+                  >
+                    {isFavorite(venue.id) ? "♥" : "♡"}
+                  </button>
                   <button
                     type="button"
                     onClick={() => focusVenue(venue)}
-                    className={`w-full px-5 py-3 text-left transition hover:bg-gray-50 ${
+                    className={`w-full px-5 py-3 pr-10 text-left transition hover:bg-gray-50 ${
                       selectedId === venue.id ? "bg-indigo-50" : ""
                     }`}
                   >
@@ -225,11 +417,16 @@ export default function VenueExplorer({
                       <span className="truncate text-sm font-medium text-gray-900">
                         {venue.name}
                       </span>
+                      {isRecentlyUpdated(venue) && (
+                        <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700">
+                          更新
+                        </span>
+                      )}
                     </div>
                     {venue.address && (
                       <p className="mt-0.5 truncate text-xs text-gray-500">{venue.address}</p>
                     )}
-                    {proof && (
+                    {proof && !proofUnknown && (
                       <blockquote className="mt-2 rounded border-l-4 border-indigo-300 bg-gray-50 p-2 text-xs italic text-gray-700">
                         “{proof}”
                         <span className="mt-1 block not-italic text-[10px] font-medium text-gray-400">
@@ -238,6 +435,53 @@ export default function VenueExplorer({
                       </blockquote>
                     )}
                   </button>
+                  {proofUnknown && (
+                    <div className="-mt-1 px-5 pb-3">
+                      <div className="rounded border-l-4 border-gray-300 bg-gray-50 p-2 text-xs text-gray-600">
+                        <span className="font-medium">喫煙可否: 不明</span>
+                        <p className="mt-1">
+                          口コミからは確認できませんでした。ご存知の方は
+                          <a
+                            href={`https://search.google.com/local/writereview?placeid=${venue.google_place_id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-medium text-indigo-600 underline"
+                          >
+                            Googleマップのクチコミ
+                          </a>
+                          で教えてください。
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  {(showAshtrayAffiliate || tabelogLink || showVapeAffiliate) && (
+                    <div className="-mt-1 flex flex-col gap-2 px-5 pb-3">
+                      {showAshtrayAffiliate && (
+                        <AffiliateSlot
+                          href={RAKUTEN_ASHTRAY_SEARCH_URL}
+                          label="灰こぼれ・火の不始末、大丈夫？消臭・飛散防止設計の携帯灰皿はコレ"
+                        />
+                      )}
+                      {tabelogLink && (
+                        <AffiliateSlot
+                          href={tabelogLink.href}
+                          pixelSrc={tabelogLink.pixelSrc}
+                          label={
+                            curatedTabelogLink
+                              ? "【喫煙席を確保】食べログでこのお店の口コミ・空席情報を確認する"
+                              : "食べログでこのお店を検索する"
+                          }
+                        />
+                      )}
+                      {showVapeAffiliate && (
+                        <AffiliateSlot
+                          href={VAPE_SEARCH_URL}
+                          label="TEREAが吸えるIQOS互換機「Fasoul Q1」。USB Type-C充電・1100mAhをチェック"
+                          note="20歳未満の方の喫煙・購入はできません"
+                        />
+                      )}
+                    </div>
+                  )}
                 </li>
               );
             })}
