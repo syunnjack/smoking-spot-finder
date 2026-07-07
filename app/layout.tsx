@@ -15,6 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
   title: "喫煙所ファインダー｜現在地から一番近い喫煙所を探す",
   description:
     "コンビニ・飲食店の口コミをAIが解析し、現在地から一番近い喫煙所を地図とリストで検索できます。紙タバコ・電子タバコ・店外灰皿の有無で色分け表示。",
