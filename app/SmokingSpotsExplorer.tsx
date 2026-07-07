@@ -93,6 +93,10 @@ export default function SmokingSpotsExplorer({
         mapRef.current = new google.maps.Map(mapDivRef.current, {
           center,
           zoom: 16,
+          // greedy: PCはマウスホイールでそのままズーム、スマホは指1本でパン・2本指ピンチでズーム
+          // （地図はページスクロールと競合しない専有レイアウトのため、cooperativeのCtrl+ホイール
+          // 要求は不要な手間になる）。
+          gestureHandling: "greedy",
         });
         infoWindowRef.current = new google.maps.InfoWindow();
         setMapReady(true);

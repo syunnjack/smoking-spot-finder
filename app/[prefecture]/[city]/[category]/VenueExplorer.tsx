@@ -285,6 +285,10 @@ export default function VenueExplorer({
         mapRef.current = new google.maps.Map(mapDivRef.current, {
           center: computeCenter(venues),
           zoom: venues.length > 0 ? 15 : 12,
+          // greedy: PCはマウスホイールでそのままズーム、スマホは指1本でパン・2本指ピンチでズーム
+          // （地図はページスクロールと競合しない専有レイアウトのため、cooperativeのCtrl+ホイール
+          // 要求は不要な手間になる）。
+          gestureHandling: "greedy",
         });
         infoWindowRef.current = new google.maps.InfoWindow();
         setMapReady(true);
@@ -481,7 +485,7 @@ export default function VenueExplorer({
                     onClick={() => toggleFavorite(venue.id)}
                     aria-pressed={isFavorite(venue.id)}
                     aria-label="お気に入りに登録"
-                    className={`absolute right-3 top-3 text-lg leading-none transition hover:scale-110 ${
+                    className={`absolute right-1 top-1 p-2.5 text-lg leading-none transition hover:scale-110 ${
                       isFavorite(venue.id) ? "text-rose-500" : "text-gray-300"
                     }`}
                   >
