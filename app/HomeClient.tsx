@@ -2,16 +2,38 @@
 
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
-import type { SmokingSpot } from "@/lib/types";
+import type { SmokingSpot, Venue } from "@/lib/types";
 import { haversineMeters, regionForPrefecture } from "@/lib/types";
 import SmokingSpotsExplorer from "./SmokingSpotsExplorer";
+import VenueExplorer from "./[prefecture]/[city]/[category]/VenueExplorer";
 
 interface Area {
   prefecture: string;
   city: string;
 }
 
+type Genre = "smoking" | "workspace";
 type Status = "idle" | "locating" | "loading" | "ready" | "error";
+
+const GENRE_COPY: Record<
+  Genre,
+  { label: string; heading: string; sub: string; buttonIdle: string; buttonLoading: string }
+> = {
+  smoking: {
+    label: "🚬 喫煙できる場所",
+    heading: "今いる場所から、一番近い喫煙所へ",
+    sub: "コンビニ・飲食店の口コミをAIが解析し、紙タバコ・電子タバコ・店外灰皿の有無を色分けして地図に表示します。",
+    buttonIdle: "📍 現在地から一番近い喫煙所を探す",
+    buttonLoading: "周辺の喫煙所を検索中...",
+  },
+  workspace: {
+    label: "💻 作業・勉強できる場所",
+    heading: "今いる場所から、作業・勉強できる場所へ",
+    sub: "カフェ・コワーキングスペース・図書館の口コミをAIが解析し、電源・WIFI・有線LAN・利用料の有無を地図に表示します。",
+    buttonIdle: "📍 現在地から一番近い作業スポットを探す",
+    buttonLoading: "周辺の作業スポットを検索中...",
+  },
+};
 
 // 位置情報が拒否された場合、端末ごとに許可を出し直す手順が異なるため具体的に案内する。
 function permissionDeniedHelp(): string {
@@ -27,17 +49,27 @@ function permissionDeniedHelp(): string {
 }
 
 export default function HomeClient({
-  areas,
+  smokingAreas,
+  workspaceAreas,
   apiKey,
 }: {
-  areas: Area[];
+  smokingAreas: Area[];
+  workspaceAreas: Area[];
   apiKey: string | undefined;
 }) {
+  const [genre, setGenre] = useState<Genre>("smoking");
   const [status, setStatus] = useState<Status>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [spots, setSpots] = useState<SmokingSpot[]>([]);
+  const [workspaceVenues, setWorkspaceVenues] = useState<Venue[]>([]);
   const [center, setCenter] = useState<{ lat: number; lng: number } | null>(null);
   const [distances, setDistances] = useState<Record<string, number>>({});
+
+  const switchGenre = useCallback((next: Genre) => {
+    setGenre(next);
+    setStatus("idle");
+    setErrorMessage(null);
+  }, []);
 
   const findNearest = useCallback(() => {
     if (!("geolocation" in navigator)) {
@@ -55,21 +87,48 @@ export default function HomeClient({
         setCenter({ lat: latitude, lng: longitude });
         setStatus("loading");
 
-        fetch(`/api/smoking-spots?latitude=${latitude}&longitude=${longitude}`)
+        if (genre === "smoking") {
+          fetch(`/api/smoking-spots?latitude=${latitude}&longitude=${longitude}`)
+            .then(async (res) => {
+              if (!res.ok) {
+                const body = await res.json().catch(() => null);
+                throw new Error(body?.error ?? "喫煙所情報の取得に失敗しました。");
+              }
+              return res.json();
+            })
+            .then((data: { spots: SmokingSpot[] }) => {
+              const dist: Record<string, number> = {};
+              for (const spot of data.spots) {
+                dist[spot.place_id] = haversineMeters(latitude, longitude, spot.lat, spot.lng);
+              }
+              setDistances(dist);
+              setSpots(data.spots);
+              setStatus("ready");
+            })
+            .catch((err: Error) => {
+              setStatus("error");
+              setErrorMessage(err.message);
+            });
+          return;
+        }
+
+        fetch(`/api/venues-nearby?category=workspace&latitude=${latitude}&longitude=${longitude}`)
           .then(async (res) => {
             if (!res.ok) {
               const body = await res.json().catch(() => null);
-              throw new Error(body?.error ?? "喫煙所情報の取得に失敗しました。");
+              throw new Error(body?.error ?? "情報の取得に失敗しました。");
             }
             return res.json();
           })
-          .then((data: { spots: SmokingSpot[] }) => {
-            const dist: Record<string, number> = {};
-            for (const spot of data.spots) {
-              dist[spot.place_id] = haversineMeters(latitude, longitude, spot.lat, spot.lng);
+          .then((data: { venues: Venue[] }) => {
+            if (data.venues.length === 0) {
+              setStatus("error");
+              setErrorMessage(
+                "現在地周辺にはまだデータがありません。下のエリア一覧から探してください。"
+              );
+              return;
             }
-            setDistances(dist);
-            setSpots(data.spots);
+            setWorkspaceVenues(data.venues);
             setStatus("ready");
           })
           .catch((err: Error) => {
@@ -87,7 +146,9 @@ export default function HomeClient({
       },
       { enableHighAccuracy: true, timeout: 10000 }
     );
-  }, []);
+  }, [genre]);
+
+  const areas = genre === "smoking" ? smokingAreas : workspaceAreas;
 
   // サーバー側で既に地方順（北→南）にソート済みのため、出現順を保ったままグルーピングするだけでよい。
   const groupedAreas = useMemo(() => {
@@ -117,20 +178,31 @@ export default function HomeClient({
           </button>
         </div>
         <div className="min-h-0 flex-1">
-          <SmokingSpotsExplorer
-            spots={spots}
-            center={center}
-            apiKey={apiKey}
-            title="現在地周辺の喫煙所"
-            subtitle={`半径1000m以内で${spots.length}件見つかりました（近い順）`}
-            distances={distances}
-          />
+          {genre === "smoking" ? (
+            <SmokingSpotsExplorer
+              spots={spots}
+              center={center}
+              apiKey={apiKey}
+              title="現在地周辺の喫煙所"
+              subtitle={`半径1000m以内で${spots.length}件見つかりました（近い順）`}
+              distances={distances}
+            />
+          ) : (
+            <VenueExplorer
+              venues={workspaceVenues}
+              category="workspace"
+              areaLabel="現在地周辺の作業・勉強できる場所"
+              googleMapsApiKey={apiKey}
+              showBackLink={false}
+            />
+          )}
         </div>
       </div>
     );
   }
 
   const isBusy = status === "locating" || status === "loading";
+  const copy = GENRE_COPY[genre];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -139,15 +211,30 @@ export default function HomeClient({
           📍
         </div>
         <div className="relative">
-          <span className="inline-flex animate-pulse items-center gap-2 rounded-full bg-white/15 px-4 py-1.5 text-sm font-medium backdrop-blur">
-            📍 現在地からすぐ探せます
-          </span>
+          <div className="inline-flex rounded-full bg-white/10 p-1 backdrop-blur">
+            {(Object.keys(GENRE_COPY) as Genre[]).map((key) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => switchGenre(key)}
+                aria-pressed={genre === key}
+                className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                  genre === key ? "bg-white text-indigo-700" : "text-white/80 hover:text-white"
+                }`}
+              >
+                {GENRE_COPY[key].label}
+              </button>
+            ))}
+          </div>
+          <div>
+            <span className="mt-6 inline-flex animate-pulse items-center gap-2 rounded-full bg-white/15 px-4 py-1.5 text-sm font-medium backdrop-blur">
+              📍 現在地からすぐ探せます
+            </span>
+          </div>
           <h1 className="mx-auto mt-5 max-w-2xl text-3xl font-bold sm:text-4xl">
-            今いる場所から、一番近い喫煙所へ
+            {copy.heading}
           </h1>
-          <p className="mx-auto mt-3 max-w-xl text-sm text-indigo-100">
-            コンビニ・飲食店の口コミをAIが解析し、紙タバコ・電子タバコ・店外灰皿の有無を色分けして地図に表示します。
-          </p>
+          <p className="mx-auto mt-3 max-w-xl text-sm text-indigo-100">{copy.sub}</p>
           <button
             type="button"
             onClick={findNearest}
@@ -157,14 +244,16 @@ export default function HomeClient({
             {status === "locating"
               ? "現在地を取得中..."
               : status === "loading"
-                ? "周辺の喫煙所を検索中..."
-                : "📍 現在地から一番近い喫煙所を探す"}
+                ? copy.buttonLoading
+                : copy.buttonIdle}
           </button>
-          <p className="mt-5">
-            <Link href="/ranking" className="text-sm text-indigo-100 underline hover:text-white">
-              🏆 喫煙所充実度ランキングを見る
-            </Link>
-          </p>
+          {genre === "smoking" && (
+            <p className="mt-5">
+              <Link href="/ranking" className="text-sm text-indigo-100 underline hover:text-white">
+                🏆 喫煙所充実度ランキングを見る
+              </Link>
+            </p>
+          )}
           {status === "error" && errorMessage && (
             <p className="mx-auto mt-4 max-w-md rounded-lg bg-white/10 px-4 py-2 text-sm text-white">
               {errorMessage}
@@ -186,7 +275,7 @@ export default function HomeClient({
                   {regionAreas.map((area) => (
                     <Link
                       key={`${area.prefecture}-${area.city}`}
-                      href={`/${encodeURIComponent(area.prefecture)}/${encodeURIComponent(area.city)}/smoking`}
+                      href={`/${encodeURIComponent(area.prefecture)}/${encodeURIComponent(area.city)}/${genre}`}
                       className="truncate text-sm text-indigo-600 hover:underline"
                     >
                       {area.city}

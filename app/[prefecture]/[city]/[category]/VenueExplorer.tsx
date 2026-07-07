@@ -249,6 +249,9 @@ interface VenueExplorerProps {
   areaLabel: string;
   googleMapsApiKey: string | undefined;
   ordinance?: StreetSmokingOrdinance | null;
+  // HomeClientの「現在地から探す」結果表示など、呼び出し側が既に独自の戻る導線を
+  // 持っている場合はfalseにして二重表示を防ぐ。
+  showBackLink?: boolean;
 }
 
 export default function VenueExplorer({
@@ -257,6 +260,7 @@ export default function VenueExplorer({
   areaLabel,
   googleMapsApiKey,
   ordinance,
+  showBackLink = true,
 }: VenueExplorerProps) {
   const mapDivRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -373,14 +377,16 @@ export default function VenueExplorer({
 
   return (
     <div className="flex h-screen w-full flex-col bg-gray-50">
-      <div className="flex shrink-0 items-center border-b border-gray-200 bg-white px-4 py-2">
-        <Link
-          href="/"
-          className="rounded-full px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100"
-        >
-          ← トップに戻る
-        </Link>
-      </div>
+      {showBackLink && (
+        <div className="flex shrink-0 items-center border-b border-gray-200 bg-white px-4 py-2">
+          <Link
+            href="/"
+            className="rounded-full px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100"
+          >
+            ← トップに戻る
+          </Link>
+        </div>
+      )}
       {ordinance && (
         <a
           href="#ordinance-details"

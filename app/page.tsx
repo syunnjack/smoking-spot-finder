@@ -1,5 +1,5 @@
 import { getSupabaseServerClient } from "@/lib/supabaseClient";
-import { REGION_ORDER, regionForPrefecture } from "@/lib/types";
+import { REGION_ORDER, regionForPrefecture, type VenueCategory } from "@/lib/types";
 import HomeClient from "./HomeClient";
 
 // エリア一覧はsync-places/import-opendataの実行で随時増えるが、毎回Supabaseに問い合わせるのは
@@ -13,7 +13,7 @@ interface Area {
 
 // venuesは1000件超あるため、Supabase/PostgRESTの1クエリあたり既定上限(1000件)を超えないよう
 // ページングしながら全件走査して、重複の無い都道府県・市区町村の一覧を組み立てる。
-async function fetchAreas(): Promise<Area[]> {
+async function fetchAreas(category: VenueCategory): Promise<Area[]> {
   let supabase;
   try {
     supabase = getSupabaseServerClient();
@@ -29,7 +29,7 @@ async function fetchAreas(): Promise<Area[]> {
     const { data, error } = await supabase
       .from("venues")
       .select("prefecture, city")
-      .eq("category", "smoking")
+      .eq("category", category)
       .not("prefecture", "is", null)
       .not("city", "is", null)
       .range(from, from + pageSize - 1);
@@ -60,6 +60,15 @@ async function fetchAreas(): Promise<Area[]> {
 }
 
 export default async function Home() {
-  const areas = await fetchAreas();
-  return <HomeClient areas={areas} apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY} />;
+  const [smokingAreas, workspaceAreas] = await Promise.all([
+    fetchAreas("smoking"),
+    fetchAreas("workspace"),
+  ]);
+  return (
+    <HomeClient
+      smokingAreas={smokingAreas}
+      workspaceAreas={workspaceAreas}
+      apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
+    />
+  );
 }
