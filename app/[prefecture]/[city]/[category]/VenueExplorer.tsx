@@ -26,6 +26,14 @@ const RAKUTEN_ASHTRAY_SEARCH_URL =
 const VAPE_SEARCH_URL =
   "https://hb.afl.rakuten.co.jp/ichiba/558fb5f7.73737464.558fb5f8.036a5b1b/?pc=https%3A%2F%2Fitem.rakuten.co.jp%2Fflavor-kitchen%2F4023101%2F&link_type=hybrid_url&ut=eyJwYWdlIjoiaXRlbSIsInR5cGUiOiJoeWJyaWRfdXJsIiwic2l6ZSI6IjI0MHgyNDAiLCJuYW0iOjEsIm5hbXAiOiJyaWdodCIsImNvbSI6MSwiY29tcCI6ImRvd24iLCJwcmljZSI6MSwiYm9yIjoxLCJjb2wiOjEsImJidG4iOjEsInByb2QiOjAsImFtcCI6ZmFsc2V9";
 
+// A8.net経由のアフィリエイト（workspaceカテゴリ向け）。
+// WiFiGO!（ポケットWiFiレンタル）はWi-Fiなしと判定された店舗に、オンスク.JP（資格学習サブスク）は
+// 図書館・自習室系の店舗に、それぞれ文脈が合う場合だけ表示する。
+const WIFIGO_URL = "https://px.a8.net/svt/ejp?a8mat=4B7VL2+47VSAA+2W74+HVFKY";
+const WIFIGO_PIXEL = "https://www18.a8.net/0.gif?a8mat=4B7VL2+47VSAA+2W74+HVFKY";
+const ONSUKU_URL = "https://px.a8.net/svt/ejp?a8mat=3NGUTC+EZGW0I+408S+60H7M";
+const ONSUKU_PIXEL = "https://www19.a8.net/0.gif?a8mat=3NGUTC+EZGW0I+408S+60H7M";
+
 // バリューコマース経由の飲食店予約導線は食べログを採用（ホットペッパーグルメは提携申請の承認待ちのため、
 // 即時提携できる食べログのMyLinkを先行して使う）。MyLinkは店舗ごとの個別リンクのため、
 // 店名で完全一致した店舗にだけ表示する（未掲載店舗にはリンク切れ防止のため出さない）。
@@ -456,6 +464,10 @@ export default function VenueExplorer({
                 ? (curatedTabelogLink ?? tabelogSearchMyLink(venue.name, venue.city))
                 : undefined;
               const showVapeAffiliate = isSmoking && metadata.allows_electronic_cigarettes_only;
+              const showWifiGoAffiliate = isWorkspace && metadata.has_wifi === false;
+              const isStudyVenue =
+                venue.category === "workspace" &&
+                (venue.name.includes("図書館") || venue.name.includes("自習室"));
               return (
                 <li key={venue.id} className="relative">
                   <button
@@ -545,7 +557,11 @@ export default function VenueExplorer({
                       </div>
                     </div>
                   )}
-                  {(showAshtrayAffiliate || tabelogLink || showVapeAffiliate) && (
+                  {(showAshtrayAffiliate ||
+                    tabelogLink ||
+                    showVapeAffiliate ||
+                    showWifiGoAffiliate ||
+                    isStudyVenue) && (
                     <div className="-mt-1 flex flex-col gap-2 px-5 pb-3">
                       {showAshtrayAffiliate && (
                         <AffiliateSlot
@@ -569,6 +585,20 @@ export default function VenueExplorer({
                           href={VAPE_SEARCH_URL}
                           label="TEREAが吸えるIQOS互換機「Fasoul Q1」。USB Type-C充電・1100mAhをチェック"
                           note="20歳未満の方の喫煙・購入はできません"
+                        />
+                      )}
+                      {showWifiGoAffiliate && (
+                        <AffiliateSlot
+                          href={WIFIGO_URL}
+                          pixelSrc={WIFIGO_PIXEL}
+                          label="この店舗はWi-Fiなし。1日180円〜のポケットWiFiレンタル「WiFiGO!」を持ち込もう"
+                        />
+                      )}
+                      {isStudyVenue && (
+                        <AffiliateSlot
+                          href={ONSUKU_URL}
+                          pixelSrc={ONSUKU_PIXEL}
+                          label="ここでの勉強、資格取得にもつなげてみる？スキマ時間で70講座以上が学び放題「オンスク.JP」"
                         />
                       )}
                     </div>
