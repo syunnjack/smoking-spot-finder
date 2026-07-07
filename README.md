@@ -19,22 +19,23 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## 便利マップ（venuesテーブル）
 
-Supabaseの `venues` テーブルに登録した店舗・施設（喫煙所、インボイス対応カフェ、コインランドリー、ジムなど）を、市町村・カテゴリで絞り込んで返すAPI。
+Supabaseの `venues` テーブルに登録した店舗・施設（喫煙所、作業・勉強できる場所、コインランドリー、ジムなど）を、市町村・カテゴリで絞り込んで返すAPI。
 
 ### 事前準備
 
-1. Supabaseプロジェクトで `supabase/migrations/0001_create_venues_table.sql` → `0002_add_location_gist_index.sql` の順にSQLを実行する（Supabase SQL Editor、または `supabase db push`）。
+1. Supabaseプロジェクトで `supabase/migrations/` 配下のSQLを番号順に実行する（Supabase SQL Editor、または `supabase db push`）。
 2. `.env.local` に以下を設定する（サービスロールキーは秘匿情報のためブラウザに公開しないこと）。
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY`
 
 ### 実装箇所
 
-- `supabase/migrations/0001_create_venues_table.sql`: `venues` テーブル定義（`category` は `smoking` / `invoice-cafe` / `laundry` / `gym` のCHECK制約付き）。
+- `supabase/migrations/0001_create_venues_table.sql`: `venues` テーブル定義（`category` は `smoking` / `workspace` / `laundry` / `gym` のCHECK制約付き）。
 - `supabase/migrations/0002_add_location_gist_index.sql`: `cube` / `earthdistance` 拡張を使い、緯度経度に対するGiSTインデックスを追加（半径検索を高速化）。
+- `supabase/migrations/0004_rename_invoice_cafe_to_workspace.sql`: 未使用だった`invoice-cafe`カテゴリを、電源・WIFI・有線LAN・利用料を軸にした`workspace`（カフェ・自習室・コワーキングスペース）に置き換え。
 - `lib/supabaseClient.ts`: サービスロールキーでSupabaseに接続するサーバー専用クライアント。
 - `app/api/locations/route.ts`: `?city=` `&category=` クエリで `venues` を絞り込み取得するAPI Route。`category` は許可された値以外だと400を返す。
-- `scripts/sync-places.ts`: 指定した市町村の施設をGoogle Places API (New) のText Search / Place Detailsで収集し、口コミをClaudeで解析して `venues.metadata` へ`google_place_id`基準でUpsertするスタンドアロンスクリプト。`npm run sync-places -- <市町村名> <smoking|invoice-cafe>` で実行する。
+- `scripts/sync-places.ts`: 指定した市町村の施設をGoogle Places API (New) のText Search / Place Detailsで収集し、口コミをClaudeで解析して `venues.metadata` へ`google_place_id`基準でUpsertするスタンドアロンスクリプト。`npm run sync-places -- <市町村名> <smoking|workspace>` で実行する。
 
 ## Getting Started
 

@@ -6,8 +6,8 @@ import {
   CATEGORY_LABELS,
   isVenueCategory,
   isSmokingMetadata,
+  isWorkspaceMetadata,
   parseVenueMetadata,
-  type SmokingMetadata,
   type Venue,
   type VenueCategory,
 } from "@/lib/types";
@@ -124,13 +124,14 @@ function faqEntry(question: string, answer: string) {
   };
 }
 
-function namesMatching(
+function namesMatching<T>(
   venues: Venue[],
-  predicate: (metadata: SmokingMetadata) => boolean,
+  guard: (value: unknown) => value is T,
+  predicate: (metadata: T) => boolean,
   limit = 5
 ): string | null {
   const names = venues
-    .filter((v) => isSmokingMetadata(v.metadata) && predicate(v.metadata as SmokingMetadata))
+    .filter((v) => guard(v.metadata) && predicate(v.metadata as T))
     .map((v) => v.name)
     .slice(0, limit);
   return names.length > 0 ? names.join("、") : null;
@@ -140,9 +141,13 @@ function buildFaqItems(category: VenueCategory, city: string, venues: Venue[]) {
   const label = CATEGORY_LABELS[category];
 
   if (category === "smoking") {
-    const paperNames = namesMatching(venues, (m) => m.allows_paper_cigarettes);
-    const electronicNames = namesMatching(venues, (m) => m.allows_electronic_cigarettes_only);
-    const ashtrayNames = namesMatching(venues, (m) => m.has_outdoor_ashtray);
+    const paperNames = namesMatching(venues, isSmokingMetadata, (m) => m.allows_paper_cigarettes);
+    const electronicNames = namesMatching(
+      venues,
+      isSmokingMetadata,
+      (m) => m.allows_electronic_cigarettes_only
+    );
+    const ashtrayNames = namesMatching(venues, isSmokingMetadata, (m) => m.has_outdoor_ashtray);
 
     return [
       faqEntry(
@@ -162,6 +167,33 @@ function buildFaqItems(category: VenueCategory, city: string, venues: Venue[]) {
         ashtrayNames
           ? `${ashtrayNames}などのコンビニで、口コミから店外灰皿の設置が確認されています。`
           : `${city}周辺で店外灰皿の設置が確認できるコンビニは現時点で登録されていません。`
+      ),
+    ];
+  }
+
+  if (category === "workspace") {
+    const powerNames = namesMatching(venues, isWorkspaceMetadata, (m) => m.has_power_outlet);
+    const wifiNames = namesMatching(venues, isWorkspaceMetadata, (m) => m.has_wifi);
+    const freeNames = namesMatching(venues, isWorkspaceMetadata, (m) => !m.has_usage_fee);
+
+    return [
+      faqEntry(
+        `${city}で電源が使えるカフェ・コワーキングスペースはどこですか？`,
+        powerNames
+          ? `${city}周辺で電源(コンセント)が利用できると口コミから確認されている店舗・施設には${powerNames}があります。座席数に限りがある場合があるため、訪問時に現地でもご確認ください。`
+          : `${city}周辺では現時点で電源の利用が確認できる店舗・施設の情報が登録されていません。`
+      ),
+      faqEntry(
+        `${city}でWIFIが使える自習室・カフェはありますか？`,
+        wifiNames
+          ? `${wifiNames}などが、口コミからWIFI利用可能と確認されています。`
+          : `${city}周辺でWIFI利用が確認できる店舗・施設は現時点で登録されていません。`
+      ),
+      faqEntry(
+        `${city}で無料で作業できる場所はどこですか？`,
+        freeNames
+          ? `${freeNames}などは、口コミから座席利用料が不要(飲食の注文のみ)と確認されています。`
+          : `${city}周辺で利用料が不要と確認できる店舗・施設は現時点で登録されていません。`
       ),
     ];
   }
@@ -209,7 +241,30 @@ function buildJsonLd(params: {
               value: metadata.has_outdoor_ashtray,
             },
           ]
-        : undefined;
+        : category === "workspace" && isWorkspaceMetadata(metadata)
+          ? [
+              {
+                "@type": "LocationFeatureSpecification",
+                name: "電源あり",
+                value: metadata.has_power_outlet,
+              },
+              {
+                "@type": "LocationFeatureSpecification",
+                name: "WIFIあり",
+                value: metadata.has_wifi,
+              },
+              {
+                "@type": "LocationFeatureSpecification",
+                name: "有線LANあり",
+                value: metadata.has_wired_lan,
+              },
+              {
+                "@type": "LocationFeatureSpecification",
+                name: "利用料あり",
+                value: metadata.has_usage_fee,
+              },
+            ]
+          : undefined;
 
     return {
       "@type": "LocalBusiness",

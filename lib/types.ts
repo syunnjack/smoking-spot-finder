@@ -99,7 +99,7 @@ export interface SmokingSpot {
 
 export const VENUE_CATEGORIES = [
   "smoking",
-  "invoice-cafe",
+  "workspace",
   "laundry",
   "gym",
 ] as const;
@@ -140,7 +140,7 @@ export interface Venue {
 
 export const CATEGORY_LABELS: Record<VenueCategory, string> = {
   smoking: "喫煙できる場所",
-  "invoice-cafe": "インボイス対応カフェ",
+  workspace: "作業・勉強できる場所",
   laundry: "コインランドリー",
   gym: "ジム",
 };
@@ -185,6 +185,28 @@ export function isSmokingMetadata(value: unknown): value is SmokingMetadata {
     typeof v.allows_paper_cigarettes === "boolean" &&
     typeof v.allows_electronic_cigarettes_only === "boolean" &&
     typeof v.has_outdoor_ashtray === "boolean" &&
+    typeof v.text_proof === "string"
+  );
+}
+
+// scripts/sync-places.ts が workspace カテゴリ（カフェ・自習室・コワーキングスペース）で
+// venues.metadata に保存する構造。電源・WIFI・有線LAN・利用料の有無を口コミから判定する。
+export interface WorkspaceMetadata {
+  has_power_outlet: boolean;
+  has_wifi: boolean;
+  has_wired_lan: boolean;
+  has_usage_fee: boolean;
+  text_proof: string;
+}
+
+export function isWorkspaceMetadata(value: unknown): value is WorkspaceMetadata {
+  if (!value || typeof value !== "object") return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.has_power_outlet === "boolean" &&
+    typeof v.has_wifi === "boolean" &&
+    typeof v.has_wired_lan === "boolean" &&
+    typeof v.has_usage_fee === "boolean" &&
     typeof v.text_proof === "string"
   );
 }

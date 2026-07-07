@@ -2,7 +2,7 @@
  * 指定した市町村のローカルデータを収集し、口コミをClaudeで解析してSupabaseへ保存するスタンドアロンスクリプト。
  *
  * 使い方:
- *   npx tsx scripts/sync-places.ts <市町村名> <smoking|invoice-cafe>
+ *   npx tsx scripts/sync-places.ts <市町村名> <smoking|workspace>
  *   例) npx tsx scripts/sync-places.ts 静岡市 smoking
  *
  * 必要な環境変数（.env.local から読み込む。CI等では事前にexportしておけばよい）:
@@ -10,7 +10,12 @@
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { VENUE_CATEGORIES, type VenueCategory, type SmokingMetadata } from "@/lib/types";
+import {
+  VENUE_CATEGORIES,
+  type VenueCategory,
+  type SmokingMetadata,
+  type WorkspaceMetadata,
+} from "@/lib/types";
 
 try {
   process.loadEnvFile(".env.local");
@@ -29,35 +34,105 @@ const MAX_PLACES_PER_RUN = 40;
 // Google Places / Anthropic への同時リクエスト数上限。
 const CONCURRENCY = 4;
 
-type SyncableCategory = Extract<VenueCategory, "smoking" | "invoice-cafe">;
+type SyncableCategory = Extract<VenueCategory, "smoking" | "workspace">;
 
-const CATEGORY_PLACE_TYPES: Record<SyncableCategory, string[]> = {
-  smoking: ["convenience_store", "restaurant", "cafe", "park"],
-  "invoice-cafe": ["cafe", "co_working_space"],
+// includedTypeを省略した場合はGoogle Places Text Searchのtypeフィルタをかけず、
+// textQueryだけで検索する（「有料自習室」のようにGoogle Places側に専用typeが存在しない業態向け）。
+interface PlaceQuerySpec {
+  includedType?: string;
+  queryLabel: string;
+}
+
+const CATEGORY_QUERIES: Record<SyncableCategory, PlaceQuerySpec[]> = {
+  smoking: [
+    { includedType: "convenience_store", queryLabel: "コンビニ" },
+    { includedType: "restaurant", queryLabel: "飲食店" },
+    { includedType: "cafe", queryLabel: "カフェ" },
+    { includedType: "park", queryLabel: "公園" },
+  ],
+  workspace: [
+    { includedType: "cafe", queryLabel: "カフェ 電源 WIFI" },
+    { includedType: "coworking_space", queryLabel: "コワーキングスペース" },
+    { includedType: "library", queryLabel: "図書館" },
+    { queryLabel: "有料自習室" },
+  ],
 };
 
-const PLACE_TYPE_QUERY_LABEL: Record<string, string> = {
-  convenience_store: "コンビニ",
-  restaurant: "飲食店",
-  cafe: "カフェ",
-  park: "公園",
-  co_working_space: "コワーキングスペース",
+// Claudeへの構造化抽出リクエストをカテゴリごとに切り替えるための設定。
+// tool_choiceで強制するtool定義とフォールバック値をセットで持たせ、processPlace側はカテゴリを意識しない。
+interface AnalysisConfig<T> {
+  systemPrompt: string;
+  toolName: string;
+  toolDescription: string;
+  inputSchema: Anthropic.Tool.InputSchema;
+  fallback: T;
+}
+
+const SMOKING_ANALYSIS_CONFIG: AnalysisConfig<SmokingMetadata> = {
+  systemPrompt:
+    "提供されたこの施設のユーザー口コミを分析してください。この施設でタバコが吸えるかどうかを判定し、以下のブーリアン（真偽値）フラグを持つ構造化されたJSONオブジェクトとして出力してください：\n" +
+    "- allows_paper_cigarettes (true/false)\n" +
+    "- allows_electronic_cigarettes_only (true/false)\n" +
+    "- has_outdoor_ashtray (true/false)\n" +
+    "- text_proof (クチコミ内から、この状態を裏付ける具体的な日本語の一文をそのまま抽出してください)",
+  toolName: "report_smoking_analysis",
+  toolDescription: "口コミの分析結果を構造化されたフラグとして報告する。",
+  inputSchema: {
+    type: "object",
+    properties: {
+      allows_paper_cigarettes: { type: "boolean" },
+      allows_electronic_cigarettes_only: { type: "boolean" },
+      has_outdoor_ashtray: { type: "boolean" },
+      text_proof: { type: "string" },
+    },
+    required: [
+      "allows_paper_cigarettes",
+      "allows_electronic_cigarettes_only",
+      "has_outdoor_ashtray",
+      "text_proof",
+    ],
+  },
+  fallback: {
+    allows_paper_cigarettes: false,
+    allows_electronic_cigarettes_only: false,
+    has_outdoor_ashtray: false,
+    text_proof: "口コミに喫煙に関する記載なし",
+  },
 };
 
-const SMOKING_ANALYSIS_SYSTEM_PROMPT =
-  "提供されたこの施設のユーザー口コミを分析してください。この施設でタバコが吸えるかどうかを判定し、以下のブーリアン（真偽値）フラグを持つ構造化されたJSONオブジェクトとして出力してください：\n" +
-  "- allows_paper_cigarettes (true/false)\n" +
-  "- allows_electronic_cigarettes_only (true/false)\n" +
-  "- has_outdoor_ashtray (true/false)\n" +
-  "- text_proof (クチコミ内から、この状態を裏付ける具体的な日本語の一文をそのまま抽出してください)";
+const WORKSPACE_ANALYSIS_CONFIG: AnalysisConfig<WorkspaceMetadata> = {
+  systemPrompt:
+    "提供されたこの施設のユーザー口コミを分析してください。この施設が作業や勉強に使えるかどうかを判定し、以下のブーリアン（真偽値）フラグを持つ構造化されたJSONオブジェクトとして出力してください：\n" +
+    "- has_power_outlet (電源・コンセントが利用できるとの記載があればtrue、無ければfalse)\n" +
+    "- has_wifi (WIFIが利用できるとの記載があればtrue、無ければfalse)\n" +
+    "- has_wired_lan (有線LANが利用できるとの記載があればtrue、無ければfalse)\n" +
+    "- has_usage_fee (座席利用料・時間制の利用料金など、飲食の注文以外に料金が必要との記載があればtrue、注文のみで利用できる場合はfalse)\n" +
+    "- text_proof (クチコミ内から、この状態を裏付ける具体的な日本語の一文をそのまま抽出してください)",
+  toolName: "report_workspace_analysis",
+  toolDescription: "口コミの分析結果を構造化されたフラグとして報告する。",
+  inputSchema: {
+    type: "object",
+    properties: {
+      has_power_outlet: { type: "boolean" },
+      has_wifi: { type: "boolean" },
+      has_wired_lan: { type: "boolean" },
+      has_usage_fee: { type: "boolean" },
+      text_proof: { type: "string" },
+    },
+    required: ["has_power_outlet", "has_wifi", "has_wired_lan", "has_usage_fee", "text_proof"],
+  },
+  fallback: {
+    has_power_outlet: false,
+    has_wifi: false,
+    has_wired_lan: false,
+    has_usage_fee: false,
+    text_proof: "口コミに作業環境に関する記載なし",
+  },
+};
 
-type SmokingAnalysis = SmokingMetadata;
-
-const FALLBACK_ANALYSIS: SmokingAnalysis = {
-  allows_paper_cigarettes: false,
-  allows_electronic_cigarettes_only: false,
-  has_outdoor_ashtray: false,
-  text_proof: "口コミに喫煙に関する記載なし",
+const ANALYSIS_CONFIG: Record<SyncableCategory, AnalysisConfig<SmokingMetadata | WorkspaceMetadata>> = {
+  smoking: SMOKING_ANALYSIS_CONFIG,
+  workspace: WORKSPACE_ANALYSIS_CONFIG,
 };
 
 interface PlaceSearchResult {
@@ -81,7 +156,7 @@ function requireEnv(name: string): string {
 }
 
 function isSyncableCategory(value: string): value is SyncableCategory {
-  return value in CATEGORY_PLACE_TYPES;
+  return value in CATEGORY_QUERIES;
 }
 
 async function mapWithConcurrency<T, R>(
@@ -106,7 +181,7 @@ async function mapWithConcurrency<T, R>(
 async function searchPlacesByText(
   apiKey: string,
   city: string,
-  placeType: string
+  spec: PlaceQuerySpec
 ): Promise<PlaceSearchResult[]> {
   const response = await fetch(PLACES_SEARCH_TEXT_URL, {
     method: "POST",
@@ -117,8 +192,8 @@ async function searchPlacesByText(
         "places.id,places.displayName,places.formattedAddress,places.location",
     },
     body: JSON.stringify({
-      textQuery: `${city} ${PLACE_TYPE_QUERY_LABEL[placeType] ?? placeType}`,
-      includedType: placeType,
+      textQuery: `${city} ${spec.queryLabel}`,
+      ...(spec.includedType ? { includedType: spec.includedType } : {}),
       languageCode: "ja",
       regionCode: "JP",
     }),
@@ -127,7 +202,7 @@ async function searchPlacesByText(
   if (!response.ok) {
     const body = await response.text().catch(() => "");
     throw new Error(
-      `Places Text Search 失敗 (type=${placeType}, status=${response.status}): ${body}`
+      `Places Text Search 失敗 (query=${spec.queryLabel}, status=${response.status}): ${body}`
     );
   }
 
@@ -167,13 +242,14 @@ function extractPrefecture(details: PlaceDetailsResult): string | null {
   return component?.longText ?? null;
 }
 
-async function analyzeSmokingInfo(
+async function analyzeReviews<T>(
   anthropic: Anthropic,
   placeName: string,
-  reviewTexts: string[]
-): Promise<SmokingAnalysis> {
+  reviewTexts: string[],
+  config: AnalysisConfig<T>
+): Promise<T> {
   if (reviewTexts.length === 0) {
-    return FALLBACK_ANALYSIS;
+    return config.fallback;
   }
 
   const reviewBlock = reviewTexts.map((text, i) => `${i + 1}. ${text}`).join("\n");
@@ -181,27 +257,13 @@ async function analyzeSmokingInfo(
   const message = await anthropic.messages.create({
     model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5",
     max_tokens: 500,
-    system: SMOKING_ANALYSIS_SYSTEM_PROMPT,
-    tool_choice: { type: "tool", name: "report_smoking_analysis" },
+    system: config.systemPrompt,
+    tool_choice: { type: "tool", name: config.toolName },
     tools: [
       {
-        name: "report_smoking_analysis",
-        description: "口コミの分析結果を構造化されたフラグとして報告する。",
-        input_schema: {
-          type: "object",
-          properties: {
-            allows_paper_cigarettes: { type: "boolean" },
-            allows_electronic_cigarettes_only: { type: "boolean" },
-            has_outdoor_ashtray: { type: "boolean" },
-            text_proof: { type: "string" },
-          },
-          required: [
-            "allows_paper_cigarettes",
-            "allows_electronic_cigarettes_only",
-            "has_outdoor_ashtray",
-            "text_proof",
-          ],
-        },
+        name: config.toolName,
+        description: config.toolDescription,
+        input_schema: config.inputSchema,
       },
     ],
     messages: [
@@ -216,7 +278,7 @@ async function analyzeSmokingInfo(
     (block): block is Anthropic.ToolUseBlock => block.type === "tool_use"
   );
 
-  return toolUse ? (toolUse.input as SmokingAnalysis) : FALLBACK_ANALYSIS;
+  return toolUse ? (toolUse.input as T) : config.fallback;
 }
 
 interface ProcessResult {
@@ -260,7 +322,7 @@ async function processPlace(
       .filter((text): text is string => Boolean(text));
 
     const name = details.displayName?.text ?? place.displayName?.text ?? "名称不明の施設";
-    const analysis = await analyzeSmokingInfo(anthropic, name, reviewTexts);
+    const analysis = await analyzeReviews(anthropic, name, reviewTexts, ANALYSIS_CONFIG[category]);
 
     const { error } = await supabase.from("venues").upsert(
       {
@@ -295,7 +357,7 @@ async function main() {
 
   if (!city || !categoryArg) {
     console.error(
-      "使い方: npx tsx scripts/sync-places.ts <市町村名> <smoking|invoice-cafe>"
+      "使い方: npx tsx scripts/sync-places.ts <市町村名> <smoking|workspace>"
     );
     process.exitCode = 1;
     return;
@@ -303,7 +365,7 @@ async function main() {
 
   if (!isSyncableCategory(categoryArg)) {
     console.error(
-      `category は次のいずれかを指定してください: ${Object.keys(CATEGORY_PLACE_TYPES).join(", ")}` +
+      `category は次のいずれかを指定してください: ${Object.keys(CATEGORY_QUERIES).join(", ")}` +
         `\n（venuesテーブル全体では ${VENUE_CATEGORIES.join(", ")} も許容されるが、施設種別マッピングが未定義のため本スクリプトでは未対応）`
     );
     process.exitCode = 1;
@@ -317,18 +379,20 @@ async function main() {
     auth: { persistSession: false },
   });
 
-  const placeTypes = CATEGORY_PLACE_TYPES[category];
-  console.log(`[sync-places] "${city}" / ${category} を検索します (types: ${placeTypes.join(", ")})`);
+  const querySpecs = CATEGORY_QUERIES[category];
+  console.log(
+    `[sync-places] "${city}" / ${category} を検索します (queries: ${querySpecs.map((s) => s.queryLabel).join(", ")})`
+  );
 
   const found = new Map<string, PlaceSearchResult>();
-  for (const placeType of placeTypes) {
+  for (const spec of querySpecs) {
     try {
-      const places = await searchPlacesByText(googleApiKey, city, placeType);
+      const places = await searchPlacesByText(googleApiKey, city, spec);
       for (const place of places) {
         if (!found.has(place.id)) found.set(place.id, place);
       }
     } catch (error) {
-      console.error(`[sync-places] type=${placeType} の検索に失敗しました`, error);
+      console.error(`[sync-places] query="${spec.queryLabel}" の検索に失敗しました`, error);
     }
   }
 

@@ -4,7 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { MarkerClusterer } from "@googlemaps/markerclusterer";
 import type { Venue, VenueCategory } from "@/lib/types";
-import { isSmokingMetadata, isUnknownProof, looksLikeConvenienceStore } from "@/lib/types";
+import {
+  isSmokingMetadata,
+  isWorkspaceMetadata,
+  isUnknownProof,
+  looksLikeConvenienceStore,
+} from "@/lib/types";
 import { loadGoogleMapsScript } from "@/lib/loadGoogleMapsScript";
 import { useFavorites } from "@/lib/useFavorites";
 import type { StreetSmokingOrdinance } from "@/lib/streetSmokingOrdinances";
@@ -146,15 +151,60 @@ const SMOKING_FILTERS: Array<{
   },
 ];
 
+type WorkspaceFilterKey = "power" | "wifi" | "wired_lan" | "free";
+
+const WORKSPACE_FILTERS: Array<{
+  key: WorkspaceFilterKey;
+  label: string;
+  matches: (metadata: Record<string, unknown>) => boolean;
+}> = [
+  {
+    key: "power",
+    label: "電源あり",
+    matches: (m) => isWorkspaceMetadata(m) && m.has_power_outlet,
+  },
+  {
+    key: "wifi",
+    label: "WIFIあり",
+    matches: (m) => isWorkspaceMetadata(m) && m.has_wifi,
+  },
+  {
+    key: "wired_lan",
+    label: "有線LANあり",
+    matches: (m) => isWorkspaceMetadata(m) && m.has_wired_lan,
+  },
+  {
+    key: "free",
+    label: "利用料不要",
+    matches: (m) => isWorkspaceMetadata(m) && !m.has_usage_fee,
+  },
+];
+
+type FilterKey = SmokingFilterKey | WorkspaceFilterKey;
+
 // Claudeが口コミから根拠を見つけられなかった場合に "<UNKNOWN>" 等のプレースホルダーを
 // text_proof にそのまま返すことがあるため、UI表示前にその状態を判定する。
 function markerColorFor(venue: Venue): string {
   const metadata = venue.metadata;
+  if (venue.category === "workspace") {
+    if (!isWorkspaceMetadata(metadata)) return MARKER_COLORS.none;
+    if (metadata.has_power_outlet && metadata.has_wifi) return MARKER_COLORS.paper;
+    if (metadata.has_wifi) return MARKER_COLORS.electronic;
+    if (metadata.has_power_outlet || metadata.has_wired_lan) return MARKER_COLORS.ashtray;
+    return MARKER_COLORS.none;
+  }
   if (!isSmokingMetadata(metadata)) return MARKER_COLORS.none;
   if (metadata.allows_paper_cigarettes) return MARKER_COLORS.paper;
   if (metadata.allows_electronic_cigarettes_only) return MARKER_COLORS.electronic;
   if (metadata.has_outdoor_ashtray) return MARKER_COLORS.ashtray;
   return MARKER_COLORS.none;
+}
+
+// smoking/workspaceどちらのmetadataもtext_proofフィールドを持つため、カテゴリを問わず取り出せる。
+function textProofOf(metadata: Record<string, unknown>): string | null {
+  if (isSmokingMetadata(metadata)) return metadata.text_proof;
+  if (isWorkspaceMetadata(metadata)) return metadata.text_proof;
+  return null;
 }
 
 function markerIcon(color: string): google.maps.Symbol {
@@ -211,7 +261,7 @@ export default function VenueExplorer({
     googleMapsApiKey ? null : "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY が設定されていません。"
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [activeFilters, setActiveFilters] = useState<Set<SmokingFilterKey>>(new Set());
+  const [activeFilters, setActiveFilters] = useState<Set<FilterKey>>(new Set());
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const { toggleFavorite, isFavorite } = useFavorites();
 
@@ -232,7 +282,7 @@ export default function VenueExplorer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [googleMapsApiKey]);
 
-  const toggleFilter = useCallback((key: SmokingFilterKey) => {
+  const toggleFilter = useCallback((key: FilterKey) => {
     setActiveFilters((prev) => {
       const next = new Set(prev);
       if (next.has(key)) {
@@ -246,8 +296,10 @@ export default function VenueExplorer({
 
   const filteredVenues = useMemo(() => {
     let result = venues;
-    if (category === "smoking" && activeFilters.size > 0) {
-      const activeMatchers = SMOKING_FILTERS.filter((f) => activeFilters.has(f.key));
+    const categoryFilters =
+      category === "smoking" ? SMOKING_FILTERS : category === "workspace" ? WORKSPACE_FILTERS : [];
+    if (categoryFilters.length > 0 && activeFilters.size > 0) {
+      const activeMatchers = categoryFilters.filter((f) => activeFilters.has(f.key));
       result = result.filter((venue) => activeMatchers.some((f) => f.matches(venue.metadata)));
     }
     if (favoritesOnly) {
@@ -268,17 +320,16 @@ export default function VenueExplorer({
     if (!map || !marker) return;
     map.panTo({ lat: venue.latitude, lng: venue.longitude });
     map.setZoom(18);
-    const metadata = venue.metadata;
-    const isSmoking = isSmokingMetadata(metadata);
-    const proof = isSmoking ? metadata.text_proof : null;
-    const proofUnknown = isSmoking && isUnknownProof(metadata.text_proof);
+    const proof = textProofOf(venue.metadata);
+    const proofUnknown = proof !== null && isUnknownProof(proof);
+    const unknownLabel = venue.category === "workspace" ? "作業環境: 不明" : "喫煙可否: 不明";
     const reviewUrl = `https://search.google.com/local/writereview?placeid=${venue.google_place_id}`;
     infoWindowRef.current?.setContent(
       `<div style="font-family: sans-serif; max-width: 220px;">
         <p style="font-weight: 600; margin-bottom: 4px;">${venue.name}</p>
         ${
           proofUnknown
-            ? `<p style="font-size: 12px; color: #6b7280;">喫煙可否: 不明<br /><a href="${reviewUrl}" target="_blank" rel="noopener noreferrer" style="color: #4f46e5;">Googleマップのクチコミで教える →</a></p>`
+            ? `<p style="font-size: 12px; color: #6b7280;">${unknownLabel}<br /><a href="${reviewUrl}" target="_blank" rel="noopener noreferrer" style="color: #4f46e5;">Googleマップのクチコミで教える →</a></p>`
             : proof
               ? `<p style="font-size: 12px; color: #374151;">${proof}</p>`
               : ""
@@ -334,8 +385,8 @@ export default function VenueExplorer({
         </a>
       )}
       <div className="flex flex-wrap gap-2 border-b border-gray-200 bg-white px-4 py-3">
-        {category === "smoking" &&
-          SMOKING_FILTERS.map((filter) => {
+        {(category === "smoking" ? SMOKING_FILTERS : category === "workspace" ? WORKSPACE_FILTERS : []).map(
+          (filter) => {
             const active = activeFilters.has(filter.key);
             return (
               <button
@@ -352,7 +403,8 @@ export default function VenueExplorer({
                 {filter.label}
               </button>
             );
-          })}
+          }
+        )}
         <button
           type="button"
           onClick={() => setFavoritesOnly((prev) => !prev)}
@@ -392,8 +444,9 @@ export default function VenueExplorer({
             {filteredVenues.map((venue) => {
               const metadata = venue.metadata;
               const isSmoking = isSmokingMetadata(metadata);
-              const proof = isSmoking ? metadata.text_proof : null;
-              const proofUnknown = isSmoking && isUnknownProof(metadata.text_proof);
+              const isWorkspace = isWorkspaceMetadata(metadata);
+              const proof = textProofOf(metadata);
+              const proofUnknown = proof !== null && isUnknownProof(proof);
               const showAshtrayAffiliate = isSmoking && metadata.has_outdoor_ashtray;
               // venuesテーブルは店舗種別を持たないため名称から簡易推定。公園はどちらの導線にも該当しない。
               const isPark = venue.name.includes("公園");
@@ -440,6 +493,28 @@ export default function VenueExplorer({
                     {venue.address && (
                       <p className="mt-0.5 truncate text-xs text-gray-500">{venue.address}</p>
                     )}
+                    {isWorkspace && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {metadata.has_power_outlet && (
+                          <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                            ⚡電源
+                          </span>
+                        )}
+                        {metadata.has_wifi && (
+                          <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                            📶WIFI
+                          </span>
+                        )}
+                        {metadata.has_wired_lan && (
+                          <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                            🖧有線LAN
+                          </span>
+                        )}
+                        <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                          {metadata.has_usage_fee ? "💰利用料あり" : "利用料なし"}
+                        </span>
+                      </div>
+                    )}
                     {proof && !proofUnknown && (
                       <blockquote className="mt-2 rounded border-l-4 border-indigo-300 bg-gray-50 p-2 text-xs italic text-gray-700">
                         “{proof}”
@@ -452,7 +527,9 @@ export default function VenueExplorer({
                   {proofUnknown && (
                     <div className="-mt-1 px-5 pb-3">
                       <div className="rounded border-l-4 border-gray-300 bg-gray-50 p-2 text-xs text-gray-600">
-                        <span className="font-medium">喫煙可否: 不明</span>
+                        <span className="font-medium">
+                          {isWorkspace ? "作業環境: 不明" : "喫煙可否: 不明"}
+                        </span>
                         <p className="mt-1">
                           口コミからは確認できませんでした。ご存知の方は
                           <a
@@ -515,6 +592,24 @@ export default function VenueExplorer({
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="h-2.5 w-2.5 rounded-full bg-yellow-500" />店外灰皿あり
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-gray-400" />情報なし
+                </span>
+              </div>
+            </div>
+          )}
+          {category === "workspace" && (
+            <div className="absolute bottom-4 left-4 z-10 rounded-lg bg-white/95 px-3 py-2 text-xs text-gray-700 shadow-md backdrop-blur">
+              <div className="flex flex-wrap gap-x-3 gap-y-1">
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-green-500" />電源+WIFIあり
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />WIFIのみ
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-yellow-500" />電源/有線LANのみ
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="h-2.5 w-2.5 rounded-full bg-gray-400" />情報なし
