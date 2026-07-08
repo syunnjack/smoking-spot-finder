@@ -563,7 +563,10 @@ export default function VenueExplorer({
                 ? (curatedTabelogLink ?? tabelogSearchMyLink(venue.name, venue.city))
                 : undefined;
               const showVapeAffiliate = isSmoking && metadata.allows_electronic_cigarettes_only;
-              const showWifiGoAffiliate = isWorkspace && metadata.has_wifi === false;
+              // Wi-Fiなしと判定された店舗に「自分のWi-Fiを持ち込もう」で訴求する導線。
+              // 待ち時間にネットを使いたいニーズはworkspace/laundryどちらの文脈にも当てはまる。
+              const showWifiGoAffiliate =
+                (isWorkspace || isLaundry) && metadata.has_wifi === false;
               const isStudyVenue =
                 venue.category === "workspace" &&
                 (venue.name.includes("図書館") || venue.name.includes("自習室"));
