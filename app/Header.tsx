@@ -20,9 +20,12 @@ export default function Header() {
         </Link>
         <Link
           href="/?genre=arcade"
-          className="shrink-0 rounded-full px-2.5 py-1.5 text-gray-600 hover:bg-gray-100"
+          className="relative shrink-0 rounded-full px-2.5 py-1.5 text-gray-600 hover:bg-gray-100"
         >
           🕹️ ゲーセン
+          <span className="absolute -right-1 -top-1 rounded-full bg-rose-500 px-1 py-0.5 text-[8px] font-bold leading-none text-white">
+            話題
+          </span>
         </Link>
         <Link
           href="/?genre=smoking"

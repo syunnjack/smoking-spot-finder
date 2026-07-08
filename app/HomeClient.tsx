@@ -86,6 +86,41 @@ const GENRE_COPY: Record<
   },
 };
 
+// ジャンルごとにヒーローのアクセントカラーを変え、複数ジャンルを扱うサイトだと一目でわかるようにする
+// （固定のindigo→violetグラデーションだと単一サービスのLPに見えてしまうための対応）。
+const GENRE_THEME: Record<Genre, { gradient: string; accentText: string; lightText: string }> = {
+  smoking: {
+    gradient: "from-slate-700 via-slate-800 to-neutral-900",
+    accentText: "text-slate-800",
+    lightText: "text-slate-200",
+  },
+  workspace: {
+    gradient: "from-indigo-600 via-indigo-700 to-violet-800",
+    accentText: "text-indigo-700",
+    lightText: "text-indigo-100",
+  },
+  laundry: {
+    gradient: "from-cyan-600 via-sky-700 to-blue-800",
+    accentText: "text-sky-700",
+    lightText: "text-sky-100",
+  },
+  gym: {
+    gradient: "from-orange-600 via-red-600 to-rose-700",
+    accentText: "text-orange-700",
+    lightText: "text-orange-100",
+  },
+  sauna: {
+    gradient: "from-emerald-700 via-teal-800 to-green-900",
+    accentText: "text-emerald-700",
+    lightText: "text-emerald-100",
+  },
+  arcade: {
+    gradient: "from-fuchsia-600 via-purple-700 to-pink-700",
+    accentText: "text-fuchsia-700",
+    lightText: "text-fuchsia-100",
+  },
+};
+
 // 位置情報が拒否された場合、端末ごとに許可を出し直す手順が異なるため具体的に案内する。
 function permissionDeniedHelp(): string {
   if (typeof navigator === "undefined") return "";
@@ -268,6 +303,7 @@ export default function HomeClient({
               areaLabel={`現在地周辺の${GENRE_COPY[genre].label.replace(/^\S+\s/, "")}`}
               googleMapsApiKey={apiKey}
               showBackLink={false}
+              initialUserLocation={center}
             />
           )}
         </div>
@@ -277,10 +313,13 @@ export default function HomeClient({
 
   const isBusy = status === "locating" || status === "loading";
   const copy = GENRE_COPY[genre];
+  const theme = GENRE_THEME[genre];
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <section className="relative overflow-hidden bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-800 px-6 py-20 text-center text-white">
+      <section
+        className={`relative overflow-hidden bg-gradient-to-br px-6 py-20 text-center text-white transition-colors duration-500 ${theme.gradient}`}
+      >
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-[220px] opacity-10">
           📍
         </div>
@@ -292,11 +331,16 @@ export default function HomeClient({
                 type="button"
                 onClick={() => switchGenre(key)}
                 aria-pressed={genre === key}
-                className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
-                  genre === key ? "bg-white text-indigo-700" : "text-white/80 hover:text-white"
+                className={`relative rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                  genre === key ? `bg-white ${GENRE_THEME[key].accentText}` : "text-white/80 hover:text-white"
                 }`}
               >
                 {GENRE_COPY[key].label}
+                {key === "arcade" && (
+                  <span className="absolute -right-1.5 -top-1.5 rounded-full bg-rose-500 px-1.5 py-0.5 text-[9px] font-bold leading-none text-white shadow-sm">
+                    話題
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -308,12 +352,12 @@ export default function HomeClient({
           <h1 className="mx-auto mt-5 max-w-2xl text-3xl font-bold sm:text-4xl">
             {copy.heading}
           </h1>
-          <p className="mx-auto mt-3 max-w-xl text-sm text-indigo-100">{copy.sub}</p>
+          <p className={`mx-auto mt-3 max-w-xl text-sm ${theme.lightText}`}>{copy.sub}</p>
           <button
             type="button"
             onClick={findNearest}
             disabled={isBusy}
-            className="mt-8 inline-flex items-center gap-2 rounded-full bg-white px-10 py-5 text-lg font-bold text-indigo-700 shadow-xl transition hover:scale-105 hover:shadow-2xl disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
+            className={`mt-8 inline-flex items-center gap-2 rounded-full bg-white px-10 py-5 text-lg font-bold shadow-xl transition hover:scale-105 hover:shadow-2xl disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100 ${theme.accentText}`}
           >
             {status === "locating"
               ? "現在地を取得中..."
@@ -322,7 +366,7 @@ export default function HomeClient({
                 : copy.buttonIdle}
           </button>
           <p className="mt-5">
-            <Link href={copy.rankingHref} className="text-sm text-indigo-100 underline hover:text-white">
+            <Link href={copy.rankingHref} className={`text-sm underline hover:text-white ${theme.lightText}`}>
               {copy.rankingLabel}
             </Link>
           </p>

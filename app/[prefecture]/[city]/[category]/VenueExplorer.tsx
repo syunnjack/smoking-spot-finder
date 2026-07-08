@@ -13,6 +13,7 @@ import {
   isArcadeMetadata,
   isUnknownProof,
   looksLikeConvenienceStore,
+  haversineMeters,
 } from "@/lib/types";
 import { loadGoogleMapsScript } from "@/lib/loadGoogleMapsScript";
 import { useFavorites } from "@/lib/useFavorites";
@@ -387,6 +388,41 @@ function textProofOf(metadata: Record<string, unknown>): string | null {
   return null;
 }
 
+// InfoWindowの内容はルート検索結果（非同期）が届いた時点で1行追記して再描画するため、
+// 初回表示時・追記時の両方から呼べる関数として切り出す。
+function buildInfoWindowHtml(venue: Venue, routeLine?: string): string {
+  const proof = textProofOf(venue.metadata);
+  const proofUnknown = proof !== null && isUnknownProof(proof);
+  const unknownLabel =
+    venue.category === "workspace"
+      ? "作業環境: 不明"
+      : venue.category === "laundry" ||
+          venue.category === "gym" ||
+          venue.category === "sauna" ||
+          venue.category === "arcade"
+        ? "設備情報: 不明"
+        : "喫煙可否: 不明";
+  const reviewUrl = `https://search.google.com/local/writereview?placeid=${venue.google_place_id}`;
+  return `<div style="font-family: sans-serif; max-width: 220px;">
+    <p style="font-weight: 600; margin-bottom: 4px;">${venue.name}</p>
+    ${
+      routeLine
+        ? `<p style="font-size: 12px; color: #4f46e5; font-weight: 600; margin-bottom: 4px;">${routeLine}</p>`
+        : ""
+    }
+    ${
+      proofUnknown
+        ? `<p style="font-size: 12px; color: #6b7280;">${unknownLabel}<br /><a href="${reviewUrl}" target="_blank" rel="noopener noreferrer" style="color: #4f46e5;">Googleマップのクチコミで教える →</a></p>`
+        : proof
+          ? `<p style="font-size: 12px; color: #374151;">${proof}</p>`
+          : ""
+    }
+  </div>`;
+}
+
+// 地図をこの距離(m)以上動かしたら「この地域で再検索」ボタンを出す。
+const RESEARCH_DISTANCE_THRESHOLD_METERS = 1200;
+
 function markerIcon(color: string): google.maps.Symbol {
   return {
     path: google.maps.SymbolPath.CIRCLE,
@@ -424,6 +460,9 @@ interface VenueExplorerProps {
   // HomeClientの「現在地から探す」結果表示など、呼び出し側が既に独自の戻る導線を
   // 持っている場合はfalseにして二重表示を防ぐ。
   showBackLink?: boolean;
+  // HomeClient側で既に現在地取得済みの場合はここで渡し、ボタン操作なしで現在地マーカー・
+  // ルート案内を有効にする。ward個別ページ等では未指定のまま、ボタンから取得させる。
+  initialUserLocation?: { lat: number; lng: number } | null;
 }
 
 export default function VenueExplorer({
@@ -433,12 +472,18 @@ export default function VenueExplorer({
   googleMapsApiKey,
   ordinance,
   showBackLink = true,
+  initialUserLocation = null,
 }: VenueExplorerProps) {
   const mapDivRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<Record<string, google.maps.Marker>>({});
   const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
   const clustererRef = useRef<MarkerClusterer | null>(null);
+  const userMarkerRef = useRef<google.maps.Marker | null>(null);
+  const directionsServiceRef = useRef<google.maps.DirectionsService | null>(null);
+  const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
+  const selectedVenueIdRef = useRef<string | null>(null);
+  const lastSearchCenterRef = useRef(computeCenter(venues));
 
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(
@@ -448,6 +493,19 @@ export default function VenueExplorer({
   const [activeFilters, setActiveFilters] = useState<Set<FilterKey>>(new Set());
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const { toggleFavorite, isFavorite } = useFavorites();
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(
+    initialUserLocation
+  );
+  const [locatingUser, setLocatingUser] = useState(false);
+  const [locateError, setLocateError] = useState<string | null>(null);
+  const [routeInfo, setRouteInfo] = useState<{
+    venueId: string;
+    durationText: string;
+    distanceText: string;
+  } | null>(null);
+  const [dynamicVenues, setDynamicVenues] = useState<Venue[] | null>(null);
+  const [showResearchButton, setShowResearchButton] = useState(false);
+  const [isResearching, setIsResearching] = useState(false);
 
   useEffect(() => {
     if (!googleMapsApiKey || !mapDivRef.current) return;
@@ -482,8 +540,12 @@ export default function VenueExplorer({
     });
   }, []);
 
+  // 地図を大きくパンした後に「この地域で再検索」した結果があればそちらを優先する
+  // （元のward単位の一覧に戻すこともできるよう、上書きではなく別stateで保持する）。
+  const baseVenues = dynamicVenues ?? venues;
+
   const filteredVenues = useMemo(() => {
-    let result = venues;
+    let result = baseVenues;
     const categoryFilters = CATEGORY_FILTERS[category] ?? [];
     if (categoryFilters.length > 0 && activeFilters.size > 0) {
       const activeMatchers = categoryFilters.filter((f) => activeFilters.has(f.key));
@@ -493,46 +555,165 @@ export default function VenueExplorer({
       result = result.filter((venue) => isFavorite(venue.id));
     }
     return result;
-  }, [venues, category, activeFilters, favoritesOnly, isFavorite]);
+  }, [baseVenues, category, activeFilters, favoritesOnly, isFavorite]);
 
   const recentlyUpdatedCount = useMemo(
-    () => venues.filter(isRecentlyUpdated).length,
-    [venues]
+    () => baseVenues.filter(isRecentlyUpdated).length,
+    [baseVenues]
   );
 
-  const focusVenue = useCallback((venue: Venue) => {
-    setSelectedId(venue.id);
-    const map = mapRef.current;
-    const marker = markersRef.current[venue.id];
-    if (!map || !marker) return;
-    map.panTo({ lat: venue.latitude, lng: venue.longitude });
-    map.setZoom(18);
-    const proof = textProofOf(venue.metadata);
-    const proofUnknown = proof !== null && isUnknownProof(proof);
-    const unknownLabel =
-      venue.category === "workspace"
-        ? "作業環境: 不明"
-        : venue.category === "laundry" ||
-            venue.category === "gym" ||
-            venue.category === "sauna" ||
-            venue.category === "arcade"
-          ? "設備情報: 不明"
-          : "喫煙可否: 不明";
-    const reviewUrl = `https://search.google.com/local/writereview?placeid=${venue.google_place_id}`;
-    infoWindowRef.current?.setContent(
-      `<div style="font-family: sans-serif; max-width: 220px;">
-        <p style="font-weight: 600; margin-bottom: 4px;">${venue.name}</p>
-        ${
-          proofUnknown
-            ? `<p style="font-size: 12px; color: #6b7280;">${unknownLabel}<br /><a href="${reviewUrl}" target="_blank" rel="noopener noreferrer" style="color: #4f46e5;">Googleマップのクチコミで教える →</a></p>`
-            : proof
-              ? `<p style="font-size: 12px; color: #374151;">${proof}</p>`
-              : ""
-        }
-      </div>`
+  const requestUserLocation = useCallback(() => {
+    if (!("geolocation" in navigator)) {
+      setLocateError("お使いの端末は現在地機能に対応していません。");
+      return;
+    }
+    setLocatingUser(true);
+    setLocateError(null);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserLocation({ lat: position.coords.latitude, lng: position.coords.longitude });
+        setLocatingUser(false);
+      },
+      () => {
+        setLocateError("現在地を取得できませんでした。位置情報の利用を許可してください。");
+        setLocatingUser(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
     );
-    infoWindowRef.current?.open({ map, anchor: marker });
   }, []);
+
+  const handleResearchArea = useCallback(async () => {
+    const map = mapRef.current;
+    const center = map?.getCenter();
+    if (!map || !center) return;
+    setIsResearching(true);
+    try {
+      const res = await fetch(
+        `/api/venues-nearby?category=${category}&latitude=${center.lat()}&longitude=${center.lng()}`
+      );
+      if (!res.ok) return;
+      const data: { venues: Venue[] } = await res.json();
+      setDynamicVenues(data.venues);
+      lastSearchCenterRef.current = { lat: center.lat(), lng: center.lng() };
+      setShowResearchButton(false);
+    } catch {
+      // 失敗時は現在表示中の一覧をそのまま維持する。
+    } finally {
+      setIsResearching(false);
+    }
+  }, [category]);
+
+  const resetToAreaVenues = useCallback(() => {
+    setDynamicVenues(null);
+    lastSearchCenterRef.current = computeCenter(venues);
+    setShowResearchButton(false);
+  }, [venues]);
+
+  // 現在地マーカー（Googleマップ標準の青いドット風）の表示・追従。
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    if (!userLocation) {
+      userMarkerRef.current?.setMap(null);
+      userMarkerRef.current = null;
+      return;
+    }
+    if (!userMarkerRef.current) {
+      userMarkerRef.current = new google.maps.Marker({
+        map: mapRef.current,
+        position: userLocation,
+        title: "現在地",
+        zIndex: 999,
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          fillColor: "#4285F4",
+          fillOpacity: 1,
+          strokeColor: "#ffffff",
+          strokeWeight: 3,
+          scale: 9,
+        },
+      });
+    } else {
+      userMarkerRef.current.setPosition(userLocation);
+    }
+  }, [mapReady, userLocation]);
+
+  // 地図を初期表示エリアから一定距離以上動かしたら「この地域で再検索」ボタンを出す。
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const map = mapRef.current;
+    const listener = map.addListener("idle", () => {
+      const center = map.getCenter();
+      if (!center) return;
+      const distance = haversineMeters(
+        lastSearchCenterRef.current.lat,
+        lastSearchCenterRef.current.lng,
+        center.lat(),
+        center.lng()
+      );
+      setShowResearchButton(distance > RESEARCH_DISTANCE_THRESHOLD_METERS);
+    });
+    return () => listener.remove();
+  }, [mapReady]);
+
+  const focusVenue = useCallback(
+    (venue: Venue) => {
+      setSelectedId(venue.id);
+      selectedVenueIdRef.current = venue.id;
+      const map = mapRef.current;
+      const marker = markersRef.current[venue.id];
+      if (!map || !marker) return;
+      map.panTo({ lat: venue.latitude, lng: venue.longitude });
+      map.setZoom(18);
+      infoWindowRef.current?.setContent(buildInfoWindowHtml(venue));
+      infoWindowRef.current?.open({ map, anchor: marker });
+
+      if (!userLocation) {
+        directionsRendererRef.current?.setMap(null);
+        setRouteInfo(null);
+        return;
+      }
+
+      if (!directionsServiceRef.current) {
+        directionsServiceRef.current = new google.maps.DirectionsService();
+      }
+      if (!directionsRendererRef.current) {
+        directionsRendererRef.current = new google.maps.DirectionsRenderer({
+          suppressMarkers: true,
+          polylineOptions: { strokeColor: "#4f46e5", strokeWeight: 4, strokeOpacity: 0.75 },
+        });
+      }
+      directionsRendererRef.current.setMap(map);
+
+      directionsServiceRef.current.route(
+        {
+          origin: userLocation,
+          destination: { lat: venue.latitude, lng: venue.longitude },
+          travelMode: google.maps.TravelMode.WALKING,
+        },
+        (result, status) => {
+          // 応答が届くまでの間に別の店舗が選択されていたら結果は捨てる。
+          if (selectedVenueIdRef.current !== venue.id) return;
+          if (status !== "OK" || !result) {
+            setRouteInfo(null);
+            return;
+          }
+          directionsRendererRef.current?.setDirections(result);
+          const leg = result.routes[0]?.legs[0];
+          if (leg?.duration && leg?.distance) {
+            setRouteInfo({
+              venueId: venue.id,
+              durationText: leg.duration.text,
+              distanceText: leg.distance.text,
+            });
+            infoWindowRef.current?.setContent(
+              buildInfoWindowHtml(venue, `🚶 現在地から徒歩${leg.duration.text}(${leg.distance.text})`)
+            );
+          }
+        }
+      );
+    },
+    [userLocation]
+  );
 
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
@@ -614,12 +795,29 @@ export default function VenueExplorer({
         >
           ♥ お気に入りのみ
         </button>
+        {userLocation ? (
+          <span className="flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-4 py-1.5 text-sm font-medium text-indigo-700">
+            📍 現在地表示中
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={requestUserLocation}
+            disabled={locatingUser}
+            className="rounded-full border border-indigo-300 bg-white px-4 py-1.5 text-sm font-medium text-indigo-700 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {locatingUser ? "現在地を取得中..." : "📍 現在地を表示"}
+          </button>
+        )}
+        {locateError && <p className="w-full text-xs text-red-600">{locateError}</p>}
       </div>
 
       <div className="flex flex-1 flex-col overflow-hidden md:flex-row">
         <aside className="order-2 flex h-1/2 w-full flex-col overflow-y-auto border-t border-gray-200 bg-white md:order-1 md:h-full md:w-96 md:border-r md:border-t-0">
           <div className="border-b border-gray-200 px-5 py-4">
-            <h1 className="text-lg font-bold text-gray-900">{areaLabel}</h1>
+            <h1 className="text-lg font-bold text-gray-900">
+              {dynamicVenues ? "地図の表示エリア周辺" : areaLabel}
+            </h1>
             <p className="mt-1 text-xs text-gray-500">
               {filteredVenues.length}件の店舗・施設
               {recentlyUpdatedCount > 0 && (
@@ -628,6 +826,15 @@ export default function VenueExplorer({
                 </span>
               )}
             </p>
+            {dynamicVenues && (
+              <button
+                type="button"
+                onClick={resetToAreaVenues}
+                className="mt-1 text-xs font-medium text-indigo-600 underline"
+              >
+                ← {areaLabel}の一覧に戻す
+              </button>
+            )}
           </div>
 
           {mapError && <p className="px-5 py-4 text-sm text-red-600">{mapError}</p>}
@@ -706,6 +913,11 @@ export default function VenueExplorer({
                     </div>
                     {venue.address && (
                       <p className="mt-0.5 truncate text-xs text-gray-500">{venue.address}</p>
+                    )}
+                    {routeInfo && routeInfo.venueId === venue.id && (
+                      <p className="mt-1 text-xs font-semibold text-indigo-600">
+                        🚶 現在地から徒歩{routeInfo.durationText}で到着！({routeInfo.distanceText})
+                      </p>
                     )}
                     {isWorkspace && (
                       <div className="mt-1.5 flex flex-wrap gap-1">
@@ -937,6 +1149,16 @@ export default function VenueExplorer({
 
         <main className="relative order-1 h-1/2 w-full md:order-2 md:h-full md:flex-1">
           <div ref={mapDivRef} className="h-full w-full" />
+          {showResearchButton && (
+            <button
+              type="button"
+              onClick={handleResearchArea}
+              disabled={isResearching}
+              className="absolute left-1/2 top-4 z-10 -translate-x-1/2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-indigo-700 shadow-lg ring-1 ring-indigo-200 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isResearching ? "検索中..." : "🔍 この地域で再検索"}
+            </button>
+          )}
           {category === "smoking" && (
             <div className="absolute bottom-4 left-4 z-10 rounded-lg bg-white/95 px-3 py-2 text-xs text-gray-700 shadow-md backdrop-blur">
               <div className="flex flex-wrap gap-x-3 gap-y-1">
