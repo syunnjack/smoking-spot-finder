@@ -17,7 +17,15 @@ type Status = "idle" | "locating" | "loading" | "ready" | "error";
 
 const GENRE_COPY: Record<
   Genre,
-  { label: string; heading: string; sub: string; buttonIdle: string; buttonLoading: string }
+  {
+    label: string;
+    heading: string;
+    sub: string;
+    buttonIdle: string;
+    buttonLoading: string;
+    rankingHref: string;
+    rankingLabel: string;
+  }
 > = {
   smoking: {
     label: "🚬 喫煙できる場所",
@@ -25,6 +33,8 @@ const GENRE_COPY: Record<
     sub: "コンビニ・飲食店の口コミをAIが解析し、紙タバコ・電子タバコ・店外灰皿の有無を色分けして地図に表示します。",
     buttonIdle: "📍 現在地から一番近い喫煙所を探す",
     buttonLoading: "周辺の喫煙所を検索中...",
+    rankingHref: "/ranking",
+    rankingLabel: "🏆 喫煙所充実度ランキングを見る",
   },
   workspace: {
     label: "💻 作業・勉強できる場所",
@@ -32,6 +42,8 @@ const GENRE_COPY: Record<
     sub: "カフェ・コワーキングスペース・図書館の口コミをAIが解析し、電源・WIFI・有線LAN・利用料の有無を地図に表示します。",
     buttonIdle: "📍 現在地から一番近い作業スポットを探す",
     buttonLoading: "周辺の作業スポットを検索中...",
+    rankingHref: "/ranking/workspace",
+    rankingLabel: "🏆 電源・WIFI充実度ランキングを見る",
   },
 };
 
@@ -247,13 +259,11 @@ export default function HomeClient({
                 ? copy.buttonLoading
                 : copy.buttonIdle}
           </button>
-          {genre === "smoking" && (
-            <p className="mt-5">
-              <Link href="/ranking" className="text-sm text-indigo-100 underline hover:text-white">
-                🏆 喫煙所充実度ランキングを見る
-              </Link>
-            </p>
-          )}
+          <p className="mt-5">
+            <Link href={copy.rankingHref} className="text-sm text-indigo-100 underline hover:text-white">
+              {copy.rankingLabel}
+            </Link>
+          </p>
           {status === "error" && errorMessage && (
             <p className="mx-auto mt-4 max-w-md rounded-lg bg-white/10 px-4 py-2 text-sm text-white">
               {errorMessage}
