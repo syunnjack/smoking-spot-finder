@@ -255,10 +255,66 @@ interface PlaceSearchResult {
   location?: { latitude?: number; longitude?: number };
 }
 
+interface ParkingOptions {
+  freeParkingLot?: boolean;
+  paidParkingLot?: boolean;
+  freeStreetParking?: boolean;
+  paidStreetParking?: boolean;
+  valetParking?: boolean;
+  freeGarageParking?: boolean;
+  paidGarageParking?: boolean;
+}
+
+interface PaymentOptions {
+  acceptsCreditCards?: boolean;
+  acceptsDebitCards?: boolean;
+  acceptsCashOnly?: boolean;
+  acceptsNfc?: boolean;
+}
+
 interface PlaceDetailsResult extends PlaceSearchResult {
   addressComponents?: Array<{ longText?: string; types?: string[] }>;
   reviews?: Array<{ text?: { text?: string } }>;
   regularOpeningHours?: OpeningHours;
+  parkingOptions?: ParkingOptions;
+  paymentOptions?: PaymentOptions;
+}
+
+// Googleは24時間営業の曜日についてclose（閉店時刻）を返さない仕様のため、全periodsにcloseが
+// 無ければ24時間営業と高確度で判定できる。一部の曜日だけcloseが無い等の曖昧なケースはnullを返し、
+// Claudeの推定（口コミの記載）を維持させる。
+function derivedHas24h(openingHours: OpeningHours | undefined): boolean | null {
+  const periods = openingHours?.periods;
+  if (!periods || periods.length === 0) return null;
+  return periods.every((p) => !p.close) ? true : null;
+}
+
+// Claudeは口コミにしか書かれていない情報しか拾えないが、Google側が構造化データとして
+// 直接持っているフィールド（駐車場・決済方法・営業時間）はそちらを正とする方が精度が高い。
+// Googleがそのフィールドを返さなかった場合（未収集の店舗）はClaudeの推定を維持する。
+function applyStructuredSignals(
+  category: SyncableCategory,
+  analysis: SmokingMetadata | WorkspaceMetadata | LaundryMetadata | GymMetadata | SaunaMetadata,
+  details: PlaceDetailsResult
+): void {
+  if (category === "gym" && details.parkingOptions) {
+    const hasParking = Object.values(details.parkingOptions).some(Boolean);
+    (analysis as GymMetadata).has_parking = hasParking;
+  }
+  if (category === "laundry" && details.paymentOptions) {
+    const cashless = Boolean(
+      details.paymentOptions.acceptsCreditCards ||
+        details.paymentOptions.acceptsDebitCards ||
+        details.paymentOptions.acceptsNfc
+    );
+    (analysis as LaundryMetadata).has_cashless_payment = cashless;
+  }
+  if (category === "gym" || category === "laundry") {
+    const has24h = derivedHas24h(details.regularOpeningHours);
+    if (has24h !== null) {
+      (analysis as GymMetadata | LaundryMetadata).has_24h = has24h;
+    }
+  }
 }
 
 function requireEnv(name: string): string {
@@ -333,10 +389,10 @@ async function fetchPlaceDetails(
     {
       headers: {
         "X-Goog-Api-Key": apiKey,
-        // regularOpeningHoursはreviewsと同じEnterprise+Atmosphere課金枠のフィールドのため、
-        // 既にreviewsを要求している本リクエストへの追加コストは発生しない。
+        // regularOpeningHours/parkingOptions/paymentOptionsはreviewsと同じEnterprise+Atmosphere
+        // 課金枠のフィールドのため、既にreviewsを要求している本リクエストへの追加コストは発生しない。
         "X-Goog-FieldMask":
-          "id,displayName,formattedAddress,location,addressComponents,reviews,regularOpeningHours",
+          "id,displayName,formattedAddress,location,addressComponents,reviews,regularOpeningHours,parkingOptions,paymentOptions",
       },
     }
   );
@@ -439,6 +495,7 @@ async function processPlace(
 
     const name = details.displayName?.text ?? place.displayName?.text ?? "名称不明の施設";
     const analysis = await analyzeReviews(anthropic, name, reviewTexts, ANALYSIS_CONFIG[category]);
+    applyStructuredSignals(category, analysis, details);
 
     const { error } = await supabase.from("venues").upsert(
       {
