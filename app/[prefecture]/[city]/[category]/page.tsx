@@ -22,6 +22,14 @@ import VenueExplorer from "./VenueExplorer";
 // sync-places/import-opendataの更新はこの間隔で反映されれば十分なため許容している。
 export const revalidate = 300;
 
+// generateStaticParamsが無いと、動的セグメント(params)へのアクセスが「リクエスト時API」扱いとなり、
+// revalidateを設定していてもルート全体が完全動的レンダリング（ISRキャッシュされない）になってしまう。
+// 空配列を返すことで「全パスは初回アクセス時に生成し、以降はrevalidate秒までISRキャッシュする」
+// 挙動になる（ビルド時に全組み合わせを静的生成はしない）。
+export async function generateStaticParams() {
+  return [];
+}
+
 interface RouteParams {
   prefecture: string;
   city: string;

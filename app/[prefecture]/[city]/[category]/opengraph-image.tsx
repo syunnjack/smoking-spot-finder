@@ -5,6 +5,12 @@ import { OgCard, OG_CONTENT_TYPE, OG_SIZE } from "@/app/ogImageCard";
 
 export const size = OG_SIZE;
 export const contentType = OG_CONTENT_TYPE;
+export const revalidate = 300;
+
+// page.tsxと同じ理由（generateStaticParams無しではparamsアクセスがルートを完全動的化する）で必要。
+export async function generateStaticParams() {
+  return [];
+}
 
 function decodeParam(value: string): string {
   try {
