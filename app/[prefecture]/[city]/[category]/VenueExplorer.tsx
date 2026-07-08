@@ -540,7 +540,7 @@ export default function VenueExplorer({
                     {proof && !proofUnknown && (
                       <blockquote className="mt-2 rounded border-l-4 border-indigo-300 bg-gray-50 p-2 text-xs italic text-gray-700">
                         “{proof}”
-                        <span className="mt-1 block not-italic text-[10px] font-medium text-gray-400">
+                        <span className="mt-1 block not-italic text-[10px] font-medium text-gray-600">
                           — AIによる口コミ解析結果
                         </span>
                       </blockquote>

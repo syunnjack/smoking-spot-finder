@@ -8,6 +8,7 @@ import {
   isSmokingMetadata,
   isWorkspaceMetadata,
   parseVenueMetadata,
+  buildOpeningHoursSpecification,
   type Venue,
   type VenueCategory,
 } from "@/lib/types";
@@ -83,6 +84,7 @@ async function fetchVenues(prefecture: string, city: string, category: VenueCate
     prefecture: row.prefecture,
     category: row.category,
     metadata: parseVenueMetadata(row.metadata),
+    opening_hours: row.opening_hours ?? null,
     created_at: row.created_at,
     updated_at: row.updated_at,
   }));
@@ -282,6 +284,7 @@ function buildJsonLd(params: {
         longitude: venue.longitude,
       },
       amenityFeature,
+      openingHoursSpecification: buildOpeningHoursSpecification(venue.opening_hours),
     };
   });
 

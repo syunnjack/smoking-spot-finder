@@ -15,6 +15,7 @@ import {
   type VenueCategory,
   type SmokingMetadata,
   type WorkspaceMetadata,
+  type OpeningHours,
 } from "@/lib/types";
 
 try {
@@ -145,6 +146,7 @@ interface PlaceSearchResult {
 interface PlaceDetailsResult extends PlaceSearchResult {
   addressComponents?: Array<{ longText?: string; types?: string[] }>;
   reviews?: Array<{ text?: { text?: string } }>;
+  regularOpeningHours?: OpeningHours;
 }
 
 function requireEnv(name: string): string {
@@ -219,8 +221,10 @@ async function fetchPlaceDetails(
     {
       headers: {
         "X-Goog-Api-Key": apiKey,
+        // regularOpeningHoursはreviewsと同じEnterprise+Atmosphere課金枠のフィールドのため、
+        // 既にreviewsを要求している本リクエストへの追加コストは発生しない。
         "X-Goog-FieldMask":
-          "id,displayName,formattedAddress,location,addressComponents,reviews",
+          "id,displayName,formattedAddress,location,addressComponents,reviews,regularOpeningHours",
       },
     }
   );
@@ -335,6 +339,7 @@ async function processPlace(
         prefecture: extractPrefecture(details),
         category,
         metadata: analysis,
+        opening_hours: details.regularOpeningHours ?? null,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "google_place_id" }

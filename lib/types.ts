@@ -123,6 +123,24 @@ export function parseVenueMetadata(raw: unknown): Record<string, unknown> {
   return {};
 }
 
+// Google Places Details (New) の regularOpeningHours をそのまま保持する。
+// JSON-LDのopeningHoursSpecification組み立て（app/[prefecture]/[city]/[category]/page.tsx）でのみ使用。
+export interface OpeningHoursPoint {
+  day: number; // 0=日曜 ... 6=土曜（Google Places準拠）
+  hour: number;
+  minute: number;
+}
+
+export interface OpeningHoursPeriod {
+  open: OpeningHoursPoint;
+  close?: OpeningHoursPoint;
+}
+
+export interface OpeningHours {
+  periods?: OpeningHoursPeriod[];
+  weekdayDescriptions?: string[];
+}
+
 export interface Venue {
   id: string;
   name: string;
@@ -134,6 +152,7 @@ export interface Venue {
   prefecture: string | null;
   category: VenueCategory;
   metadata: Record<string, unknown>;
+  opening_hours: OpeningHours | null;
   created_at: string;
   updated_at: string;
 }
@@ -197,6 +216,48 @@ export interface WorkspaceMetadata {
   has_wired_lan: boolean;
   has_usage_fee: boolean;
   text_proof: string;
+}
+
+const SCHEMA_ORG_DAY_NAMES = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+] as const;
+
+function pad2(n: number): string {
+  return n.toString().padStart(2, "0");
+}
+
+export interface OpeningHoursSpecification {
+  "@type": "OpeningHoursSpecification";
+  dayOfWeek: string;
+  opens: string;
+  closes: string;
+}
+
+// venues.opening_hoursの生データ（Google Places準拠のday/hour/minute）を、
+// LocalBusiness構造化データが要求するdayOfWeek/opens/closes形式に変換する。
+// 24時間営業（closeが無い期間）は正しく表現できないため対象から除く。
+export function buildOpeningHoursSpecification(
+  openingHours: OpeningHours | null | undefined
+): OpeningHoursSpecification[] | undefined {
+  const periods = openingHours?.periods;
+  if (!periods || periods.length === 0) return undefined;
+
+  const specs = periods
+    .filter((p): p is Required<OpeningHoursPeriod> => Boolean(p.close))
+    .map((p) => ({
+      "@type": "OpeningHoursSpecification" as const,
+      dayOfWeek: SCHEMA_ORG_DAY_NAMES[p.open.day] ?? "Monday",
+      opens: `${pad2(p.open.hour)}:${pad2(p.open.minute)}`,
+      closes: `${pad2(p.close.hour)}:${pad2(p.close.minute)}`,
+    }));
+
+  return specs.length > 0 ? specs : undefined;
 }
 
 export function isWorkspaceMetadata(value: unknown): value is WorkspaceMetadata {

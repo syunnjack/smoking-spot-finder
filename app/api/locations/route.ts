@@ -63,6 +63,7 @@ export async function GET(request: NextRequest) {
       prefecture: row.prefecture,
       category: row.category,
       metadata: parseVenueMetadata(row.metadata),
+      opening_hours: row.opening_hours ?? null,
       created_at: row.created_at,
       updated_at: row.updated_at,
     }));
