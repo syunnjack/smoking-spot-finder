@@ -47,7 +47,7 @@ export default async function Image({
   return new ImageResponse(
     (
       <OgCard
-        eyebrow="喫煙所ファインダー"
+        eyebrow="近くナビ"
         heading={`${prefecture}${city}`}
         subheading={`${label}を${count}件掲載`}
       />

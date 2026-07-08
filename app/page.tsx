@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { getSupabaseServerClient } from "@/lib/supabaseClient";
 import { REGION_ORDER, regionForPrefecture, type VenueCategory } from "@/lib/types";
 import HomeClient from "./HomeClient";
@@ -65,10 +66,14 @@ export default async function Home() {
     fetchAreas("workspace"),
   ]);
   return (
-    <HomeClient
-      smokingAreas={smokingAreas}
-      workspaceAreas={workspaceAreas}
-      apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
-    />
+    // HomeClientはヘッダーの「/?genre=workspace」リンクを読むためuseSearchParamsを使う。
+    // App RouterでuseSearchParamsを使うクライアントコンポーネントはSuspense境界が必須。
+    <Suspense fallback={null}>
+      <HomeClient
+        smokingAreas={smokingAreas}
+        workspaceAreas={workspaceAreas}
+        apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
+      />
+    </Suspense>
   );
 }

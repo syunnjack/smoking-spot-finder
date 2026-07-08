@@ -28,7 +28,7 @@ export default function SmokingSpotsPage() {
   }, []);
 
   return (
-    <div className="h-screen w-full">
+    <div className="h-[calc(100vh-3.5rem)] w-full">
       <SmokingSpotsExplorer
         spots={spots}
         center={SHIZUOKA_STATION}

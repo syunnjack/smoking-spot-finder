@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import type { SmokingSpot, Venue } from "@/lib/types";
 import { haversineMeters, regionForPrefecture } from "@/lib/types";
 import SmokingSpotsExplorer from "./SmokingSpotsExplorer";
@@ -69,7 +70,11 @@ export default function HomeClient({
   workspaceAreas: Area[];
   apiKey: string | undefined;
 }) {
-  const [genre, setGenre] = useState<Genre>("smoking");
+  // ヘッダーの「💻 作業・勉強」リンク（/?genre=workspace）から来た場合に初期選択を合わせる。
+  const searchParams = useSearchParams();
+  const [genre, setGenre] = useState<Genre>(
+    searchParams.get("genre") === "workspace" ? "workspace" : "smoking"
+  );
   const [status, setStatus] = useState<Status>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [spots, setSpots] = useState<SmokingSpot[]>([]);
@@ -179,7 +184,7 @@ export default function HomeClient({
 
   if (status === "ready" && center) {
     return (
-      <div className="flex h-screen w-full flex-col">
+      <div className="flex h-[calc(100vh-3.5rem)] w-full flex-col">
         <div className="flex shrink-0 items-center border-b border-gray-200 bg-white px-4 py-2">
           <button
             type="button"

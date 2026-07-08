@@ -8,7 +8,7 @@ export default function Image() {
   return new ImageResponse(
     (
       <OgCard
-        eyebrow="喫煙所ファインダー"
+        eyebrow="近くナビ"
         heading="静岡駅 喫煙所マップ"
         subheading="半径1000m以内のコンビニ・飲食店の口コミをAIが解析"
       />

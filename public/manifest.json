@@ -1,7 +1,7 @@
 {
-  "name": "喫煙所ファインダー",
-  "short_name": "喫煙所ファインダー",
-  "description": "現在地から一番近い喫煙所を、口コミのAI解析で探せるアプリ",
+  "name": "近くナビ",
+  "short_name": "近くナビ",
+  "description": "現在地から一番近い喫煙所や、電源・WIFIが使える作業スポットを、口コミのAI解析で探せるアプリ",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

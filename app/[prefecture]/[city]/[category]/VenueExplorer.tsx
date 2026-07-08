@@ -374,7 +374,7 @@ export default function VenueExplorer({
   }, [mapReady, filteredVenues, focusVenue]);
 
   return (
-    <div className="flex h-screen w-full flex-col bg-gray-50">
+    <div className="flex h-[calc(100vh-3.5rem)] w-full flex-col bg-gray-50">
       {showBackLink && (
         <div className="flex shrink-0 items-center border-b border-gray-200 bg-white px-4 py-2">
           <Link
