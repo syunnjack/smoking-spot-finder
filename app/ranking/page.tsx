@@ -4,6 +4,7 @@ import { getSupabaseServerClient } from "@/lib/supabaseClient";
 import { isSmokingMetadata, parseVenueMetadata } from "@/lib/types";
 import { RAKUTEN_ASHTRAY_SEARCH_URL, VAPE_SEARCH_URL } from "@/lib/affiliateLinks";
 import PrBanner from "@/app/PrBanner";
+import RankingCrossLinks from "@/app/RankingCrossLinks";
 
 // 5分間はエッジキャッシュから返し、毎回全件集計をやり直さない（画面遷移の高速化）。
 export const revalidate = 300;
@@ -91,11 +92,7 @@ export default async function RankingPage() {
       <p className="mt-3 text-sm text-gray-600">
         各市区町村のコンビニ・飲食店のうち、口コミのAI解析で喫煙可能(紙タバコ・電子タバコ・店外灰皿のいずれか)と確認できた店舗の割合が高い順に並べています。
       </p>
-      <p className="mt-2 text-sm">
-        <Link href="/ranking/workspace" className="text-indigo-600 hover:underline">
-          💻 電源・WIFI充実度ランキングはこちら
-        </Link>
-      </p>
+      <RankingCrossLinks current="smoking" />
 
       {stats.length > 0 && (
         <Link

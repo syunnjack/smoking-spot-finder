@@ -8,6 +8,8 @@ import { haversineMeters, isVenueCategory, parseVenueMetadata, type Venue } from
 const DEFAULT_RADIUS_METERS: Record<string, number> = {
   smoking: 1000,
   workspace: 3000,
+  laundry: 2000,
+  gym: 3000,
 };
 
 function toRad(deg: number): number {

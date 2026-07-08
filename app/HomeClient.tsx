@@ -13,8 +13,10 @@ interface Area {
   city: string;
 }
 
-type Genre = "smoking" | "workspace";
+type Genre = "smoking" | "workspace" | "laundry" | "gym";
 type Status = "idle" | "locating" | "loading" | "ready" | "error";
+
+const GENRES: Genre[] = ["smoking", "workspace", "laundry", "gym"];
 
 const GENRE_COPY: Record<
   Genre,
@@ -46,6 +48,24 @@ const GENRE_COPY: Record<
     rankingHref: "/ranking/workspace",
     rankingLabel: "🏆 電源・WIFI充実度ランキングを見る",
   },
+  laundry: {
+    label: "🧺 コインランドリー",
+    heading: "今いる場所から、一番近いコインランドリーへ",
+    sub: "口コミをAIが解析し、24時間営業・大型洗濯機/乾燥機・キャッシュレス対応・WIFIの有無を地図に表示します。",
+    buttonIdle: "📍 現在地から一番近いコインランドリーを探す",
+    buttonLoading: "周辺のコインランドリーを検索中...",
+    rankingHref: "/ranking/laundry",
+    rankingLabel: "🏆 コインランドリー充実度ランキングを見る",
+  },
+  gym: {
+    label: "💪 ジム",
+    heading: "今いる場所から、一番近いジムへ",
+    sub: "口コミをAIが解析し、24時間営業・都度利用可・シャワー・駐車場の有無を地図に表示します。",
+    buttonIdle: "📍 現在地から一番近いジムを探す",
+    buttonLoading: "周辺のジムを検索中...",
+    rankingHref: "/ranking/gym",
+    rankingLabel: "🏆 ジム充実度ランキングを見る",
+  },
 };
 
 // 位置情報が拒否された場合、端末ごとに許可を出し直す手順が異なるため具体的に案内する。
@@ -64,21 +84,26 @@ function permissionDeniedHelp(): string {
 export default function HomeClient({
   smokingAreas,
   workspaceAreas,
+  laundryAreas,
+  gymAreas,
   apiKey,
 }: {
   smokingAreas: Area[];
   workspaceAreas: Area[];
+  laundryAreas: Area[];
+  gymAreas: Area[];
   apiKey: string | undefined;
 }) {
-  // ヘッダーの「💻 作業・勉強」リンク（/?genre=workspace）から来た場合に初期選択を合わせる。
+  // ヘッダーの各ジャンルリンク（/?genre=workspace 等）から来た場合に初期選択を合わせる。
   const searchParams = useSearchParams();
-  const [genre, setGenre] = useState<Genre>(
-    searchParams.get("genre") === "workspace" ? "workspace" : "smoking"
-  );
+  const [genre, setGenre] = useState<Genre>(() => {
+    const requested = searchParams.get("genre");
+    return GENRES.includes(requested as Genre) ? (requested as Genre) : "smoking";
+  });
   const [status, setStatus] = useState<Status>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [spots, setSpots] = useState<SmokingSpot[]>([]);
-  const [workspaceVenues, setWorkspaceVenues] = useState<Venue[]>([]);
+  const [genericVenues, setGenericVenues] = useState<Venue[]>([]);
   const [center, setCenter] = useState<{ lat: number; lng: number } | null>(null);
   const [distances, setDistances] = useState<Record<string, number>>({});
 
@@ -129,7 +154,7 @@ export default function HomeClient({
           return;
         }
 
-        fetch(`/api/venues-nearby?category=workspace&latitude=${latitude}&longitude=${longitude}`)
+        fetch(`/api/venues-nearby?category=${genre}&latitude=${latitude}&longitude=${longitude}`)
           .then(async (res) => {
             if (!res.ok) {
               const body = await res.json().catch(() => null);
@@ -145,7 +170,7 @@ export default function HomeClient({
               );
               return;
             }
-            setWorkspaceVenues(data.venues);
+            setGenericVenues(data.venues);
             setStatus("ready");
           })
           .catch((err: Error) => {
@@ -165,7 +190,13 @@ export default function HomeClient({
     );
   }, [genre]);
 
-  const areas = genre === "smoking" ? smokingAreas : workspaceAreas;
+  const AREAS_BY_GENRE: Record<Genre, Area[]> = {
+    smoking: smokingAreas,
+    workspace: workspaceAreas,
+    laundry: laundryAreas,
+    gym: gymAreas,
+  };
+  const areas = AREAS_BY_GENRE[genre];
 
   // サーバー側で既に地方順（北→南）にソート済みのため、出現順を保ったままグルーピングするだけでよい。
   const groupedAreas = useMemo(() => {
@@ -206,9 +237,9 @@ export default function HomeClient({
             />
           ) : (
             <VenueExplorer
-              venues={workspaceVenues}
-              category="workspace"
-              areaLabel="現在地周辺の作業・勉強できる場所"
+              venues={genericVenues}
+              category={genre}
+              areaLabel={`現在地周辺の${GENRE_COPY[genre].label.replace(/^\S+\s/, "")}`}
               googleMapsApiKey={apiKey}
               showBackLink={false}
             />
@@ -228,7 +259,7 @@ export default function HomeClient({
           📍
         </div>
         <div className="relative">
-          <div className="inline-flex rounded-full bg-white/10 p-1 backdrop-blur">
+          <div className="inline-flex flex-wrap justify-center gap-1 rounded-2xl bg-white/10 p-1 backdrop-blur">
             {(Object.keys(GENRE_COPY) as Genre[]).map((key) => (
               <button
                 key={key}

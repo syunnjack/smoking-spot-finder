@@ -11,15 +11,30 @@ export default function Header() {
         </span>
         近くナビ
       </Link>
-      <nav className="flex items-center gap-1 text-xs font-medium">
-        <Link href="/" className="rounded-full px-3 py-1.5 text-gray-600 hover:bg-gray-100">
+      <nav className="flex items-center gap-1 overflow-x-auto text-xs font-medium">
+        <Link
+          href="/"
+          className="shrink-0 rounded-full px-2.5 py-1.5 text-gray-600 hover:bg-gray-100"
+        >
           🚬 喫煙
         </Link>
         <Link
           href="/?genre=workspace"
-          className="rounded-full px-3 py-1.5 text-gray-600 hover:bg-gray-100"
+          className="shrink-0 rounded-full px-2.5 py-1.5 text-gray-600 hover:bg-gray-100"
         >
           💻 作業・勉強
+        </Link>
+        <Link
+          href="/?genre=laundry"
+          className="shrink-0 rounded-full px-2.5 py-1.5 text-gray-600 hover:bg-gray-100"
+        >
+          🧺 洗濯
+        </Link>
+        <Link
+          href="/?genre=gym"
+          className="shrink-0 rounded-full px-2.5 py-1.5 text-gray-600 hover:bg-gray-100"
+        >
+          💪 ジム
         </Link>
       </nav>
     </header>
