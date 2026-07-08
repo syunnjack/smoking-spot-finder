@@ -92,6 +92,24 @@ export default async function WorkspaceRankingPage() {
         </Link>
       </p>
 
+      {stats.length > 0 && (
+        <Link
+          href={`/${encodeURIComponent(stats[0].prefecture)}/${encodeURIComponent(stats[0].city)}/workspace`}
+          className="mt-6 flex items-center justify-between rounded-lg border border-indigo-200 bg-indigo-50 px-5 py-4 transition hover:bg-indigo-100"
+        >
+          <span className="text-sm text-gray-700">
+            🏆 1位は
+            <span className="font-bold text-indigo-700">
+              {stats[0].prefecture}{stats[0].city}
+            </span>
+            (電源・WIFI充実率{Math.round(stats[0].rate * 100)}%)
+          </span>
+          <span className="shrink-0 text-sm font-semibold text-indigo-600">
+            実際の店舗一覧を見る →
+          </span>
+        </Link>
+      )}
+
       {stats.length === 0 ? (
         <p className="mt-8 text-sm text-gray-500">まだデータがありません。</p>
       ) : (
