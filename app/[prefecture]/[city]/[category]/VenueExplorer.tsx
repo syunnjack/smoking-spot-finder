@@ -13,26 +13,20 @@ import {
 import { loadGoogleMapsScript } from "@/lib/loadGoogleMapsScript";
 import { useFavorites } from "@/lib/useFavorites";
 import type { StreetSmokingOrdinance } from "@/lib/streetSmokingOrdinances";
+import {
+  RAKUTEN_ASHTRAY_SEARCH_URL,
+  VAPE_SEARCH_URL,
+  WIFIGO_URL,
+  WIFIGO_PIXEL,
+  ONSUKU_URL,
+  ONSUKU_PIXEL,
+} from "@/lib/affiliateLinks";
 
 // アフィリエイト導線。
 // 「PR」表記は景品表示法のステルスマーケティング規制（2023年10月施行）対応のため、
 // リンク差し替え後も必ず残すこと。
-// 楽天アフィリエイト（使い捨て携帯灰皿, pandainterior/pan-yhg01）
-const RAKUTEN_ASHTRAY_SEARCH_URL =
-  "https://hb.afl.rakuten.co.jp/ichiba/558fbb4b.d3ca1d3b.558fbb4c.404f01bf/?pc=https%3A%2F%2Fitem.rakuten.co.jp%2Fpandainterior%2Fpan-yhg01%2F&link_type=hybrid_url&ut=eyJwYWdlIjoiaXRlbSIsInR5cGUiOiJoeWJyaWRfdXJsIiwic2l6ZSI6IjEwMHgxMDAiLCJuYW0iOjEsIm5hbXAiOiJyaWdodCIsImNvbSI6MSwiY29tcCI6ImRvd24iLCJwcmljZSI6MSwiYm9yIjoxLCJjb2wiOjEsImJidG4iOjEsInByb2QiOjAsImFtcCI6ZmFsc2V9";
-// たばこ事業法上、加熱式・電子タバコ機器も20歳未満への広告訴求は禁止されているため、
-// 「臭い・煙が完全になくなる」等の効果効能を示唆する表現は使わず、年齢表記も必須で残すこと。
-// 楽天アフィリエイト（IQOS互換の加熱式タバコデバイス「Fasoul Q1」, flavor-kitchen/4023101）
-const VAPE_SEARCH_URL =
-  "https://hb.afl.rakuten.co.jp/ichiba/558fb5f7.73737464.558fb5f8.036a5b1b/?pc=https%3A%2F%2Fitem.rakuten.co.jp%2Fflavor-kitchen%2F4023101%2F&link_type=hybrid_url&ut=eyJwYWdlIjoiaXRlbSIsInR5cGUiOiJoeWJyaWRfdXJsIiwic2l6ZSI6IjI0MHgyNDAiLCJuYW0iOjEsIm5hbXAiOiJyaWdodCIsImNvbSI6MSwiY29tcCI6ImRvd24iLCJwcmljZSI6MSwiYm9yIjoxLCJjb2wiOjEsImJidG4iOjEsInByb2QiOjAsImFtcCI6ZmFsc2V9";
-
-// A8.net経由のアフィリエイト（workspaceカテゴリ向け）。
 // WiFiGO!（ポケットWiFiレンタル）はWi-Fiなしと判定された店舗に、オンスク.JP（資格学習サブスク）は
 // 図書館・自習室系の店舗に、それぞれ文脈が合う場合だけ表示する。
-const WIFIGO_URL = "https://px.a8.net/svt/ejp?a8mat=4B7VL2+47VSAA+2W74+HVFKY";
-const WIFIGO_PIXEL = "https://www18.a8.net/0.gif?a8mat=4B7VL2+47VSAA+2W74+HVFKY";
-const ONSUKU_URL = "https://px.a8.net/svt/ejp?a8mat=3NGUTC+EZGW0I+408S+60H7M";
-const ONSUKU_PIXEL = "https://www19.a8.net/0.gif?a8mat=3NGUTC+EZGW0I+408S+60H7M";
 
 // バリューコマース経由の飲食店予約導線は食べログを採用（ホットペッパーグルメは提携申請の承認待ちのため、
 // 即時提携できる食べログのMyLinkを先行して使う）。MyLinkは店舗ごとの個別リンクのため、

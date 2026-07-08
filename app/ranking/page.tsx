@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getSupabaseServerClient } from "@/lib/supabaseClient";
 import { isSmokingMetadata, parseVenueMetadata } from "@/lib/types";
+import { RAKUTEN_ASHTRAY_SEARCH_URL, VAPE_SEARCH_URL } from "@/lib/affiliateLinks";
+import PrBanner from "@/app/PrBanner";
 
 // 5分間はエッジキャッシュから返し、毎回全件集計をやり直さない（画面遷移の高速化）。
 export const revalidate = 300;
@@ -80,7 +82,10 @@ export default async function RankingPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-16">
-      <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">
+      <Link href="/" className="text-sm font-medium text-gray-500 hover:text-gray-900">
+        ← トップに戻る
+      </Link>
+      <h1 className="mt-4 text-2xl font-bold text-gray-900 sm:text-3xl">
         喫煙所充実度ランキング
       </h1>
       <p className="mt-3 text-sm text-gray-600">
@@ -120,6 +125,20 @@ export default async function RankingPage() {
           ))}
         </ol>
       )}
+
+      <PrBanner
+        items={[
+          {
+            href: RAKUTEN_ASHTRAY_SEARCH_URL,
+            label: "灰こぼれ・火の不始末、大丈夫？消臭・飛散防止設計の携帯灰皿はコレ",
+          },
+          {
+            href: VAPE_SEARCH_URL,
+            label: "TEREAが吸えるIQOS互換機「Fasoul Q1」。USB Type-C充電・1100mAhをチェック",
+            note: "20歳未満の方の喫煙・購入はできません",
+          },
+        ]}
+      />
     </div>
   );
 }

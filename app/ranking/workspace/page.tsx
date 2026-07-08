@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getSupabaseServerClient } from "@/lib/supabaseClient";
 import { isWorkspaceMetadata, parseVenueMetadata } from "@/lib/types";
+import { WIFIGO_URL, WIFIGO_PIXEL, ONSUKU_URL, ONSUKU_PIXEL } from "@/lib/affiliateLinks";
+import PrBanner from "@/app/PrBanner";
 
 // 5分間はエッジキャッシュから返し、毎回全件集計をやり直さない（画面遷移の高速化）。
 export const revalidate = 300;
@@ -75,7 +77,10 @@ export default async function WorkspaceRankingPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-16">
-      <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">
+      <Link href="/" className="text-sm font-medium text-gray-500 hover:text-gray-900">
+        ← トップに戻る
+      </Link>
+      <h1 className="mt-4 text-2xl font-bold text-gray-900 sm:text-3xl">
         電源・WIFI充実度ランキング
       </h1>
       <p className="mt-3 text-sm text-gray-600">
@@ -115,6 +120,21 @@ export default async function WorkspaceRankingPage() {
           ))}
         </ol>
       )}
+
+      <PrBanner
+        items={[
+          {
+            href: WIFIGO_URL,
+            pixelSrc: WIFIGO_PIXEL,
+            label: "作業先にWi-Fiがなくても安心。1日180円〜のポケットWiFiレンタル「WiFiGO!」をチェック",
+          },
+          {
+            href: ONSUKU_URL,
+            pixelSrc: ONSUKU_PIXEL,
+            label: "スキマ時間で資格取得。70講座以上が学び放題「オンスク.JP」をチェック",
+          },
+        ]}
+      />
     </div>
   );
 }
