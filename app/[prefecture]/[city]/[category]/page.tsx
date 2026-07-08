@@ -408,7 +408,9 @@ export default async function VenueCategoryPage({
             href={lineShareUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-full bg-[#06C755] px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+            // LINE公式カラー(#06C755)は白文字とのコントラスト比が2.26でWCAG AA(4.5)未達のため、
+            // 色相・彩度を保ったまま明度だけ下げてLINEグリーンと視認できる範囲で基準を満たす#068655に調整。
+            className="rounded-full bg-[#068655] px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
           >
             LINEで送る
           </a>
