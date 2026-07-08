@@ -13,10 +13,10 @@ interface Area {
   city: string;
 }
 
-type Genre = "smoking" | "workspace" | "laundry" | "gym" | "sauna";
+type Genre = "smoking" | "workspace" | "laundry" | "gym" | "sauna" | "arcade";
 type Status = "idle" | "locating" | "loading" | "ready" | "error";
 
-const GENRES: Genre[] = ["smoking", "workspace", "laundry", "gym", "sauna"];
+const GENRES: Genre[] = ["smoking", "workspace", "laundry", "gym", "sauna", "arcade"];
 
 const GENRE_COPY: Record<
   Genre,
@@ -75,6 +75,15 @@ const GENRE_COPY: Record<
     rankingHref: "/ranking/sauna",
     rankingLabel: "🏆 サウナ充実度ランキングを見る",
   },
+  arcade: {
+    label: "🕹️ ゲームセンター",
+    heading: "今いる場所から、一番近いゲーセンへ",
+    sub: "口コミをAIが解析し、プリクラ・カプセルトイ・クレーンゲーム・ビデオゲームの充実度を地図に表示します。",
+    buttonIdle: "📍 現在地から一番近いゲーセンを探す",
+    buttonLoading: "周辺のゲーセンを検索中...",
+    rankingHref: "/ranking/arcade",
+    rankingLabel: "🏆 プリクラ・クレーンゲーム充実度ランキングを見る",
+  },
 };
 
 // 位置情報が拒否された場合、端末ごとに許可を出し直す手順が異なるため具体的に案内する。
@@ -96,6 +105,7 @@ export default function HomeClient({
   laundryAreas,
   gymAreas,
   saunaAreas,
+  arcadeAreas,
   apiKey,
 }: {
   smokingAreas: Area[];
@@ -103,6 +113,7 @@ export default function HomeClient({
   laundryAreas: Area[];
   gymAreas: Area[];
   saunaAreas: Area[];
+  arcadeAreas: Area[];
   apiKey: string | undefined;
 }) {
   // ヘッダーの各ジャンルリンク（/?genre=workspace 等）から来た場合に初期選択を合わせる。
@@ -209,6 +220,7 @@ export default function HomeClient({
     laundry: laundryAreas,
     gym: gymAreas,
     sauna: saunaAreas,
+    arcade: arcadeAreas,
   };
   const areas = AREAS_BY_GENRE[genre];
 

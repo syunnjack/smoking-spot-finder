@@ -7,6 +7,7 @@ const RANKING_PAGES: Record<VenueCategory, { href: string; label: string }> = {
   laundry: { href: "/ranking/laundry", label: "🧺 コインランドリー充実度ランキング" },
   gym: { href: "/ranking/gym", label: "💪 ジム充実度ランキング" },
   sauna: { href: "/ranking/sauna", label: "🧖 サウナ充実度ランキング" },
+  arcade: { href: "/ranking/arcade", label: "🕹️ プリクラ・クレーンゲーム充実度ランキング" },
 };
 
 // 各ランキングページの上部に置き、他4ジャンルのランキングへ相互に飛べるようにする。

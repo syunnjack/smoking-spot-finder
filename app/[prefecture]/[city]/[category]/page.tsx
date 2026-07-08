@@ -10,6 +10,7 @@ import {
   isLaundryMetadata,
   isGymMetadata,
   isSaunaMetadata,
+  isArcadeMetadata,
   parseVenueMetadata,
   buildOpeningHoursSpecification,
   type Venue,
@@ -292,6 +293,33 @@ function buildFaqItems(category: VenueCategory, city: string, venues: Venue[]) {
     ];
   }
 
+  if (category === "arcade") {
+    const purikuraNames = namesMatching(venues, isArcadeMetadata, (m) => m.has_purikura);
+    const gachaNames = namesMatching(venues, isArcadeMetadata, (m) => m.has_gacha);
+    const craneGameNames = namesMatching(venues, isArcadeMetadata, (m) => m.has_crane_game);
+
+    return [
+      faqEntry(
+        `${city}でプリクラが撮れるゲームセンターはどこですか？`,
+        purikuraNames
+          ? `${city}周辺でプリクラ・写真シール機があると口コミから確認されているゲームセンターには${purikuraNames}があります。`
+          : `${city}周辺では現時点でプリクラの設置が確認できるゲームセンターの情報が登録されていません。`
+      ),
+      faqEntry(
+        `${city}でカプセルトイ(ガチャガチャ)が充実しているゲームセンターはありますか？`,
+        gachaNames
+          ? `${gachaNames}などが、口コミからカプセルトイの設置が確認されています。`
+          : `${city}周辺でカプセルトイの設置が確認できるゲームセンターは現時点で登録されていません。`
+      ),
+      faqEntry(
+        `${city}でUFOキャッチャー・クレーンゲームができるゲームセンターはどこですか？`,
+        craneGameNames
+          ? `${craneGameNames}などは、口コミからクレーンゲーム・プライズ機の設置が確認されています。`
+          : `${city}周辺でクレーンゲームの設置が確認できるゲームセンターは現時点で登録されていません。`
+      ),
+    ];
+  }
+
   const names = venues.slice(0, 5).map((v) => v.name);
   return [
     faqEntry(
@@ -349,6 +377,14 @@ function buildAmenityFeature(category: VenueCategory, metadata: Record<string, u
       { "@type": "LocationFeatureSpecification", name: "水風呂あり", value: metadata.has_cold_bath },
       { "@type": "LocationFeatureSpecification", name: "岩盤浴あり", value: metadata.has_ganban_yoku },
       { "@type": "LocationFeatureSpecification", name: "露天風呂あり", value: metadata.has_outdoor_bath },
+    ];
+  }
+  if (category === "arcade" && isArcadeMetadata(metadata)) {
+    return [
+      { "@type": "LocationFeatureSpecification", name: "プリクラあり", value: metadata.has_purikura },
+      { "@type": "LocationFeatureSpecification", name: "カプセルトイあり", value: metadata.has_gacha },
+      { "@type": "LocationFeatureSpecification", name: "クレーンゲームあり", value: metadata.has_crane_game },
+      { "@type": "LocationFeatureSpecification", name: "ビデオゲームあり", value: metadata.has_video_game },
     ];
   }
   return undefined;

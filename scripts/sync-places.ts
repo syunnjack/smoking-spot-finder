@@ -2,7 +2,7 @@
  * 指定した市町村のローカルデータを収集し、口コミをClaudeで解析してSupabaseへ保存するスタンドアロンスクリプト。
  *
  * 使い方:
- *   npx tsx scripts/sync-places.ts <市町村名> <smoking|workspace|laundry|gym|sauna>
+ *   npx tsx scripts/sync-places.ts <市町村名> <smoking|workspace|laundry|gym|sauna|arcade>
  *   例) npx tsx scripts/sync-places.ts 静岡市 smoking
  *
  * 必要な環境変数（.env.local から読み込む。CI等では事前にexportしておけばよい）:
@@ -18,6 +18,7 @@ import {
   type LaundryMetadata,
   type GymMetadata,
   type SaunaMetadata,
+  type ArcadeMetadata,
   type OpeningHours,
 } from "@/lib/types";
 
@@ -40,7 +41,7 @@ const CONCURRENCY = 4;
 
 type SyncableCategory = Extract<
   VenueCategory,
-  "smoking" | "workspace" | "laundry" | "gym" | "sauna"
+  "smoking" | "workspace" | "laundry" | "gym" | "sauna" | "arcade"
 >;
 
 // includedTypeを省略した場合はGoogle Places Text Searchのtypeフィルタをかけず、
@@ -72,6 +73,10 @@ const CATEGORY_QUERIES: Record<SyncableCategory, PlaceQuerySpec[]> = {
     { includedType: "sauna", queryLabel: "サウナ" },
     { includedType: "public_bath", queryLabel: "スーパー銭湯 天然温泉" },
     { queryLabel: "岩盤浴" },
+  ],
+  arcade: [
+    { includedType: "video_arcade", queryLabel: "ゲームセンター" },
+    { includedType: "amusement_center", queryLabel: "アミューズメント施設" },
   ],
 };
 
@@ -237,15 +242,48 @@ const SAUNA_ANALYSIS_CONFIG: AnalysisConfig<SaunaMetadata> = {
   },
 };
 
+const ARCADE_ANALYSIS_CONFIG: AnalysisConfig<ArcadeMetadata> = {
+  systemPrompt:
+    "提供されたこの施設のユーザー口コミを分析してください。このゲームセンターの設備を判定し、以下のブーリアン（真偽値）フラグを持つ構造化されたJSONオブジェクトとして出力してください：\n" +
+    "- has_purikura (プリクラ・写真シール機があるとの記載があればtrue、無ければfalse)\n" +
+    "- has_gacha (カプセルトイ・ガチャガチャがあるとの記載があればtrue、無ければfalse)\n" +
+    "- has_crane_game (UFOキャッチャー・クレーンゲーム・プライズ機があるとの記載があればtrue、無ければfalse)\n" +
+    "- has_video_game (対戦台・音楽ゲーム等のビデオゲーム筐体があるとの記載があればtrue、無ければfalse)\n" +
+    "- text_proof (クチコミ内から、この状態を裏付ける具体的な日本語の一文をそのまま抽出してください)",
+  toolName: "report_arcade_analysis",
+  toolDescription: "口コミの分析結果を構造化されたフラグとして報告する。",
+  inputSchema: {
+    type: "object",
+    properties: {
+      has_purikura: { type: "boolean" },
+      has_gacha: { type: "boolean" },
+      has_crane_game: { type: "boolean" },
+      has_video_game: { type: "boolean" },
+      text_proof: { type: "string" },
+    },
+    required: ["has_purikura", "has_gacha", "has_crane_game", "has_video_game", "text_proof"],
+  },
+  fallback: {
+    has_purikura: false,
+    has_gacha: false,
+    has_crane_game: false,
+    has_video_game: false,
+    text_proof: "口コミに設備に関する記載なし",
+  },
+};
+
 const ANALYSIS_CONFIG: Record<
   SyncableCategory,
-  AnalysisConfig<SmokingMetadata | WorkspaceMetadata | LaundryMetadata | GymMetadata | SaunaMetadata>
+  AnalysisConfig<
+    SmokingMetadata | WorkspaceMetadata | LaundryMetadata | GymMetadata | SaunaMetadata | ArcadeMetadata
+  >
 > = {
   smoking: SMOKING_ANALYSIS_CONFIG,
   workspace: WORKSPACE_ANALYSIS_CONFIG,
   laundry: LAUNDRY_ANALYSIS_CONFIG,
   sauna: SAUNA_ANALYSIS_CONFIG,
   gym: GYM_ANALYSIS_CONFIG,
+  arcade: ARCADE_ANALYSIS_CONFIG,
 };
 
 interface PlaceSearchResult {
@@ -294,7 +332,13 @@ function derivedHas24h(openingHours: OpeningHours | undefined): boolean | null {
 // Googleがそのフィールドを返さなかった場合（未収集の店舗）はClaudeの推定を維持する。
 function applyStructuredSignals(
   category: SyncableCategory,
-  analysis: SmokingMetadata | WorkspaceMetadata | LaundryMetadata | GymMetadata | SaunaMetadata,
+  analysis:
+    | SmokingMetadata
+    | WorkspaceMetadata
+    | LaundryMetadata
+    | GymMetadata
+    | SaunaMetadata
+    | ArcadeMetadata,
   details: PlaceDetailsResult
 ): void {
   if (category === "gym" && details.parkingOptions) {
@@ -534,7 +578,7 @@ async function main() {
 
   if (!city || !categoryArg) {
     console.error(
-      "使い方: npx tsx scripts/sync-places.ts <市町村名> <smoking|workspace|laundry|gym|sauna>"
+      "使い方: npx tsx scripts/sync-places.ts <市町村名> <smoking|workspace|laundry|gym|sauna|arcade>"
     );
     process.exitCode = 1;
     return;

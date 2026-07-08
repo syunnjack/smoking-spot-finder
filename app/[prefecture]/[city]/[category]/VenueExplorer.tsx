@@ -10,6 +10,7 @@ import {
   isLaundryMetadata,
   isGymMetadata,
   isSaunaMetadata,
+  isArcadeMetadata,
   isUnknownProof,
   looksLikeConvenienceStore,
 } from "@/lib/types";
@@ -278,12 +279,42 @@ const SAUNA_FILTERS: Array<{
   },
 ];
 
+type ArcadeFilterKey = "purikura" | "gacha" | "crane_game" | "video_game";
+
+const ARCADE_FILTERS: Array<{
+  key: ArcadeFilterKey;
+  label: string;
+  matches: (metadata: Record<string, unknown>) => boolean;
+}> = [
+  {
+    key: "purikura",
+    label: "プリクラあり",
+    matches: (m) => isArcadeMetadata(m) && m.has_purikura,
+  },
+  {
+    key: "gacha",
+    label: "カプセルトイあり",
+    matches: (m) => isArcadeMetadata(m) && m.has_gacha,
+  },
+  {
+    key: "crane_game",
+    label: "クレーンゲームあり",
+    matches: (m) => isArcadeMetadata(m) && m.has_crane_game,
+  },
+  {
+    key: "video_game",
+    label: "ビデオゲームあり",
+    matches: (m) => isArcadeMetadata(m) && m.has_video_game,
+  },
+];
+
 type FilterKey =
   | SmokingFilterKey
   | WorkspaceFilterKey
   | LaundryFilterKey
   | GymFilterKey
-  | SaunaFilterKey;
+  | SaunaFilterKey
+  | ArcadeFilterKey;
 
 const CATEGORY_FILTERS: Partial<
   Record<
@@ -296,6 +327,7 @@ const CATEGORY_FILTERS: Partial<
   laundry: LAUNDRY_FILTERS,
   gym: GYM_FILTERS,
   sauna: SAUNA_FILTERS,
+  arcade: ARCADE_FILTERS,
 };
 
 // Claudeが口コミから根拠を見つけられなかった場合に "<UNKNOWN>" 等のプレースホルダーを
@@ -330,6 +362,13 @@ function markerColorFor(venue: Venue): string {
     if (metadata.has_ganban_yoku || metadata.has_outdoor_bath) return MARKER_COLORS.ashtray;
     return MARKER_COLORS.none;
   }
+  if (venue.category === "arcade") {
+    if (!isArcadeMetadata(metadata)) return MARKER_COLORS.none;
+    if (metadata.has_crane_game && metadata.has_purikura) return MARKER_COLORS.paper;
+    if (metadata.has_crane_game) return MARKER_COLORS.electronic;
+    if (metadata.has_gacha || metadata.has_video_game) return MARKER_COLORS.ashtray;
+    return MARKER_COLORS.none;
+  }
   if (!isSmokingMetadata(metadata)) return MARKER_COLORS.none;
   if (metadata.allows_paper_cigarettes) return MARKER_COLORS.paper;
   if (metadata.allows_electronic_cigarettes_only) return MARKER_COLORS.electronic;
@@ -344,6 +383,7 @@ function textProofOf(metadata: Record<string, unknown>): string | null {
   if (isLaundryMetadata(metadata)) return metadata.text_proof;
   if (isGymMetadata(metadata)) return metadata.text_proof;
   if (isSaunaMetadata(metadata)) return metadata.text_proof;
+  if (isArcadeMetadata(metadata)) return metadata.text_proof;
   return null;
 }
 
@@ -472,7 +512,10 @@ export default function VenueExplorer({
     const unknownLabel =
       venue.category === "workspace"
         ? "作業環境: 不明"
-        : venue.category === "laundry" || venue.category === "gym" || venue.category === "sauna"
+        : venue.category === "laundry" ||
+            venue.category === "gym" ||
+            venue.category === "sauna" ||
+            venue.category === "arcade"
           ? "設備情報: 不明"
           : "喫煙可否: 不明";
     const reviewUrl = `https://search.google.com/local/writereview?placeid=${venue.google_place_id}`;
@@ -602,6 +645,7 @@ export default function VenueExplorer({
               const isLaundry = isLaundryMetadata(metadata);
               const isGym = isGymMetadata(metadata);
               const isSauna = isSaunaMetadata(metadata);
+              const isArcade = isArcadeMetadata(metadata);
               const proof = textProofOf(metadata);
               const proofUnknown = proof !== null && isUnknownProof(proof);
               const showAshtrayAffiliate = isSmoking && metadata.has_outdoor_ashtray;
@@ -757,6 +801,30 @@ export default function VenueExplorer({
                         )}
                       </div>
                     )}
+                    {isArcade && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {metadata.has_purikura && (
+                          <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                            📸プリクラ
+                          </span>
+                        )}
+                        {metadata.has_gacha && (
+                          <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                            🧸カプセルトイ
+                          </span>
+                        )}
+                        {metadata.has_crane_game && (
+                          <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                            🎁クレーンゲーム
+                          </span>
+                        )}
+                        {metadata.has_video_game && (
+                          <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                            🕹️ビデオゲーム
+                          </span>
+                        )}
+                      </div>
+                    )}
                     {proof && !proofUnknown && (
                       <blockquote className="mt-2 rounded border-l-4 border-indigo-300 bg-gray-50 p-2 text-xs italic text-gray-700">
                         “{proof}”
@@ -772,7 +840,7 @@ export default function VenueExplorer({
                         <span className="font-medium">
                           {isWorkspace
                             ? "作業環境: 不明"
-                            : isLaundry || isGym || isSauna
+                            : isLaundry || isGym || isSauna || isArcade
                               ? "設備情報: 不明"
                               : "喫煙可否: 不明"}
                         </span>
@@ -952,6 +1020,24 @@ export default function VenueExplorer({
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="h-2.5 w-2.5 rounded-full bg-yellow-500" />岩盤浴/露天風呂のみ
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-gray-400" />情報なし
+                </span>
+              </div>
+            </div>
+          )}
+          {category === "arcade" && (
+            <div className="absolute bottom-4 left-4 z-10 rounded-lg bg-white/95 px-3 py-2 text-xs text-gray-700 shadow-md backdrop-blur">
+              <div className="flex flex-wrap gap-x-3 gap-y-1">
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-green-500" />クレーンゲーム+プリクラ
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />クレーンゲームのみ
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-yellow-500" />カプセルトイ/ビデオゲームのみ
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="h-2.5 w-2.5 rounded-full bg-gray-400" />情報なし

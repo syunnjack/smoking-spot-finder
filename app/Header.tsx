@@ -19,6 +19,12 @@ export default function Header() {
           💻 作業・勉強
         </Link>
         <Link
+          href="/?genre=arcade"
+          className="shrink-0 rounded-full px-2.5 py-1.5 text-gray-600 hover:bg-gray-100"
+        >
+          🕹️ ゲーセン
+        </Link>
+        <Link
           href="/?genre=smoking"
           className="shrink-0 rounded-full px-2.5 py-1.5 text-gray-600 hover:bg-gray-100"
         >

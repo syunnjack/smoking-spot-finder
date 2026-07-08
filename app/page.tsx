@@ -61,13 +61,15 @@ async function fetchAreas(category: VenueCategory): Promise<Area[]> {
 }
 
 export default async function Home() {
-  const [smokingAreas, workspaceAreas, laundryAreas, gymAreas, saunaAreas] = await Promise.all([
-    fetchAreas("smoking"),
-    fetchAreas("workspace"),
-    fetchAreas("laundry"),
-    fetchAreas("gym"),
-    fetchAreas("sauna"),
-  ]);
+  const [smokingAreas, workspaceAreas, laundryAreas, gymAreas, saunaAreas, arcadeAreas] =
+    await Promise.all([
+      fetchAreas("smoking"),
+      fetchAreas("workspace"),
+      fetchAreas("laundry"),
+      fetchAreas("gym"),
+      fetchAreas("sauna"),
+      fetchAreas("arcade"),
+    ]);
   return (
     // HomeClientはヘッダーの「/?genre=workspace」リンクを読むためuseSearchParamsを使う。
     // App RouterでuseSearchParamsを使うクライアントコンポーネントはSuspense境界が必須。
@@ -78,6 +80,7 @@ export default async function Home() {
         laundryAreas={laundryAreas}
         gymAreas={gymAreas}
         saunaAreas={saunaAreas}
+        arcadeAreas={arcadeAreas}
         apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
       />
     </Suspense>

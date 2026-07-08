@@ -103,6 +103,7 @@ export const VENUE_CATEGORIES = [
   "laundry",
   "gym",
   "sauna",
+  "arcade",
 ] as const;
 
 export type VenueCategory = (typeof VENUE_CATEGORIES)[number];
@@ -164,6 +165,7 @@ export const CATEGORY_LABELS: Record<VenueCategory, string> = {
   laundry: "コインランドリー",
   gym: "ジム",
   sauna: "サウナ・温浴施設",
+  arcade: "ゲームセンター",
 };
 
 // scripts/sync-places.ts がClaudeの解析結果として venues.metadata に保存する構造。
@@ -335,6 +337,29 @@ export function isSaunaMetadata(value: unknown): value is SaunaMetadata {
     typeof v.has_cold_bath === "boolean" &&
     typeof v.has_ganban_yoku === "boolean" &&
     typeof v.has_outdoor_bath === "boolean" &&
+    typeof v.text_proof === "string"
+  );
+}
+
+// scripts/sync-places.ts が arcade カテゴリ（ゲームセンター）で venues.metadata に保存する構造。
+// 収益化ではなく「話題性・拡散のきっかけ」を狙ったジャンルのため、直近のトレンド
+// （プリクラ・カプセルトイ・クレーンゲームの充実、ビデオゲーム台の有無）を軸にする。
+export interface ArcadeMetadata {
+  has_purikura: boolean;
+  has_gacha: boolean;
+  has_crane_game: boolean;
+  has_video_game: boolean;
+  text_proof: string;
+}
+
+export function isArcadeMetadata(value: unknown): value is ArcadeMetadata {
+  if (!value || typeof value !== "object") return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.has_purikura === "boolean" &&
+    typeof v.has_gacha === "boolean" &&
+    typeof v.has_crane_game === "boolean" &&
+    typeof v.has_video_game === "boolean" &&
     typeof v.text_proof === "string"
   );
 }

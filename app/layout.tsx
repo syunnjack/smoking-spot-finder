@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
   title: "近くナビ｜今いる場所から、必要な場所をすぐ見つける",
   description:
-    "口コミをAIが解析し、現在地から一番近い作業スペース・ジム・サウナ・コインランドリー・喫煙所を地図とリストで検索できます。",
+    "口コミをAIが解析し、現在地から一番近い作業スペース・ジム・サウナ・コインランドリー・喫煙所・ゲームセンターを地図とリストで検索できます。",
   manifest: "/manifest.json",
   icons: {
     icon: ["/icons/icon-192.png", "/icons/icon-512.png"],
