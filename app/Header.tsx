@@ -13,16 +13,16 @@ export default function Header() {
       </Link>
       <nav className="flex items-center gap-1 overflow-x-auto text-xs font-medium">
         <Link
-          href="/"
-          className="shrink-0 rounded-full px-2.5 py-1.5 text-gray-600 hover:bg-gray-100"
-        >
-          🚬 喫煙
-        </Link>
-        <Link
           href="/?genre=workspace"
           className="shrink-0 rounded-full px-2.5 py-1.5 text-gray-600 hover:bg-gray-100"
         >
           💻 作業・勉強
+        </Link>
+        <Link
+          href="/?genre=smoking"
+          className="shrink-0 rounded-full px-2.5 py-1.5 text-gray-600 hover:bg-gray-100"
+        >
+          🚬 喫煙
         </Link>
         <Link
           href="/?genre=laundry"

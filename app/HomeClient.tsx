@@ -106,10 +106,12 @@ export default function HomeClient({
   apiKey: string | undefined;
 }) {
   // ヘッダーの各ジャンルリンク（/?genre=workspace 等）から来た場合に初期選択を合わせる。
+  // デフォルトはworkspace（喫煙は社会的なイメージ・LLMOでの引用されやすさの観点から、
+  // サイトの「顔」としては最も万人受けするジャンルを優先する）。
   const searchParams = useSearchParams();
   const [genre, setGenre] = useState<Genre>(() => {
     const requested = searchParams.get("genre");
-    return GENRES.includes(requested as Genre) ? (requested as Genre) : "smoking";
+    return GENRES.includes(requested as Genre) ? (requested as Genre) : "workspace";
   });
   const [status, setStatus] = useState<Status>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);

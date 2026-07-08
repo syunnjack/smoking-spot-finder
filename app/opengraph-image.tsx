@@ -5,6 +5,8 @@ import { OgCard, OG_CONTENT_TYPE, OG_SIZE } from "./ogImageCard";
 export const size = OG_SIZE;
 export const contentType = OG_CONTENT_TYPE;
 
+// ジャンル横断でエリア数（都道府県+市区町村の重複なし件数）を数える。
+// トップページのOGPは特定ジャンルに偏らせず、5ジャンル横断のスケール感を伝える。
 async function countAreas(): Promise<number> {
   let supabase;
   try {
@@ -20,7 +22,6 @@ async function countAreas(): Promise<number> {
     const { data, error } = await supabase
       .from("venues")
       .select("prefecture, city")
-      .eq("category", "smoking")
       .not("prefecture", "is", null)
       .not("city", "is", null)
       .range(from, from + pageSize - 1);
@@ -40,8 +41,8 @@ export default async function Image() {
     (
       <OgCard
         eyebrow="近くナビ"
-        heading="現在地から、一番近い喫煙所へ"
-        subheading={`全国${areaCount}エリアのコンビニ・飲食店をAIが解析`}
+        heading="今いる場所から、必要な場所へ"
+        subheading={`全国${areaCount}エリアで作業スペース・ジム・サウナ・コインランドリー・喫煙所をAIが解析`}
       />
     ),
     { ...size }
