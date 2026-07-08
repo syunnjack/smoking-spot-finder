@@ -271,3 +271,45 @@ export function isWorkspaceMetadata(value: unknown): value is WorkspaceMetadata 
     typeof v.text_proof === "string"
   );
 }
+
+// scripts/sync-places.ts が laundry カテゴリ（コインランドリー）で venues.metadata に保存する構造。
+export interface LaundryMetadata {
+  has_24h: boolean;
+  has_large_machine: boolean;
+  has_cashless_payment: boolean;
+  has_wifi: boolean;
+  text_proof: string;
+}
+
+export function isLaundryMetadata(value: unknown): value is LaundryMetadata {
+  if (!value || typeof value !== "object") return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.has_24h === "boolean" &&
+    typeof v.has_large_machine === "boolean" &&
+    typeof v.has_cashless_payment === "boolean" &&
+    typeof v.has_wifi === "boolean" &&
+    typeof v.text_proof === "string"
+  );
+}
+
+// scripts/sync-places.ts が gym カテゴリ（ジム）で venues.metadata に保存する構造。
+export interface GymMetadata {
+  has_24h: boolean;
+  has_dropin: boolean;
+  has_shower: boolean;
+  has_parking: boolean;
+  text_proof: string;
+}
+
+export function isGymMetadata(value: unknown): value is GymMetadata {
+  if (!value || typeof value !== "object") return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.has_24h === "boolean" &&
+    typeof v.has_dropin === "boolean" &&
+    typeof v.has_shower === "boolean" &&
+    typeof v.has_parking === "boolean" &&
+    typeof v.text_proof === "string"
+  );
+}

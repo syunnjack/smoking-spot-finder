@@ -7,6 +7,8 @@ import type { Venue, VenueCategory } from "@/lib/types";
 import {
   isSmokingMetadata,
   isWorkspaceMetadata,
+  isLaundryMetadata,
+  isGymMetadata,
   isUnknownProof,
   looksLikeConvenienceStore,
 } from "@/lib/types";
@@ -182,7 +184,77 @@ const WORKSPACE_FILTERS: Array<{
   },
 ];
 
-type FilterKey = SmokingFilterKey | WorkspaceFilterKey;
+type LaundryFilterKey = "24h" | "large_machine" | "cashless" | "laundry_wifi";
+
+const LAUNDRY_FILTERS: Array<{
+  key: LaundryFilterKey;
+  label: string;
+  matches: (metadata: Record<string, unknown>) => boolean;
+}> = [
+  {
+    key: "24h",
+    label: "24時間営業",
+    matches: (m) => isLaundryMetadata(m) && m.has_24h,
+  },
+  {
+    key: "large_machine",
+    label: "大型機あり",
+    matches: (m) => isLaundryMetadata(m) && m.has_large_machine,
+  },
+  {
+    key: "cashless",
+    label: "キャッシュレス対応",
+    matches: (m) => isLaundryMetadata(m) && m.has_cashless_payment,
+  },
+  {
+    key: "laundry_wifi",
+    label: "WIFIあり",
+    matches: (m) => isLaundryMetadata(m) && m.has_wifi,
+  },
+];
+
+type GymFilterKey = "gym_24h" | "dropin" | "shower" | "parking";
+
+const GYM_FILTERS: Array<{
+  key: GymFilterKey;
+  label: string;
+  matches: (metadata: Record<string, unknown>) => boolean;
+}> = [
+  {
+    key: "gym_24h",
+    label: "24時間営業",
+    matches: (m) => isGymMetadata(m) && m.has_24h,
+  },
+  {
+    key: "dropin",
+    label: "都度利用可",
+    matches: (m) => isGymMetadata(m) && m.has_dropin,
+  },
+  {
+    key: "shower",
+    label: "シャワーあり",
+    matches: (m) => isGymMetadata(m) && m.has_shower,
+  },
+  {
+    key: "parking",
+    label: "駐車場あり",
+    matches: (m) => isGymMetadata(m) && m.has_parking,
+  },
+];
+
+type FilterKey = SmokingFilterKey | WorkspaceFilterKey | LaundryFilterKey | GymFilterKey;
+
+const CATEGORY_FILTERS: Partial<
+  Record<
+    VenueCategory,
+    Array<{ key: FilterKey; label: string; matches: (metadata: Record<string, unknown>) => boolean }>
+  >
+> = {
+  smoking: SMOKING_FILTERS,
+  workspace: WORKSPACE_FILTERS,
+  laundry: LAUNDRY_FILTERS,
+  gym: GYM_FILTERS,
+};
 
 // Claudeが口コミから根拠を見つけられなかった場合に "<UNKNOWN>" 等のプレースホルダーを
 // text_proof にそのまま返すことがあるため、UI表示前にその状態を判定する。
@@ -195,6 +267,20 @@ function markerColorFor(venue: Venue): string {
     if (metadata.has_power_outlet || metadata.has_wired_lan) return MARKER_COLORS.ashtray;
     return MARKER_COLORS.none;
   }
+  if (venue.category === "laundry") {
+    if (!isLaundryMetadata(metadata)) return MARKER_COLORS.none;
+    if (metadata.has_24h && metadata.has_large_machine) return MARKER_COLORS.paper;
+    if (metadata.has_24h) return MARKER_COLORS.electronic;
+    if (metadata.has_large_machine || metadata.has_cashless_payment) return MARKER_COLORS.ashtray;
+    return MARKER_COLORS.none;
+  }
+  if (venue.category === "gym") {
+    if (!isGymMetadata(metadata)) return MARKER_COLORS.none;
+    if (metadata.has_24h && metadata.has_dropin) return MARKER_COLORS.paper;
+    if (metadata.has_dropin) return MARKER_COLORS.electronic;
+    if (metadata.has_24h || metadata.has_shower) return MARKER_COLORS.ashtray;
+    return MARKER_COLORS.none;
+  }
   if (!isSmokingMetadata(metadata)) return MARKER_COLORS.none;
   if (metadata.allows_paper_cigarettes) return MARKER_COLORS.paper;
   if (metadata.allows_electronic_cigarettes_only) return MARKER_COLORS.electronic;
@@ -202,10 +288,13 @@ function markerColorFor(venue: Venue): string {
   return MARKER_COLORS.none;
 }
 
-// smoking/workspaceどちらのmetadataもtext_proofフィールドを持つため、カテゴリを問わず取り出せる。
+// smoking/workspace/laundry/gymいずれのmetadataもtext_proofフィールドを持つため、
+// カテゴリを問わず取り出せる。
 function textProofOf(metadata: Record<string, unknown>): string | null {
   if (isSmokingMetadata(metadata)) return metadata.text_proof;
   if (isWorkspaceMetadata(metadata)) return metadata.text_proof;
+  if (isLaundryMetadata(metadata)) return metadata.text_proof;
+  if (isGymMetadata(metadata)) return metadata.text_proof;
   return null;
 }
 
@@ -306,8 +395,7 @@ export default function VenueExplorer({
 
   const filteredVenues = useMemo(() => {
     let result = venues;
-    const categoryFilters =
-      category === "smoking" ? SMOKING_FILTERS : category === "workspace" ? WORKSPACE_FILTERS : [];
+    const categoryFilters = CATEGORY_FILTERS[category] ?? [];
     if (categoryFilters.length > 0 && activeFilters.size > 0) {
       const activeMatchers = categoryFilters.filter((f) => activeFilters.has(f.key));
       result = result.filter((venue) => activeMatchers.some((f) => f.matches(venue.metadata)));
@@ -332,7 +420,12 @@ export default function VenueExplorer({
     map.setZoom(18);
     const proof = textProofOf(venue.metadata);
     const proofUnknown = proof !== null && isUnknownProof(proof);
-    const unknownLabel = venue.category === "workspace" ? "作業環境: 不明" : "喫煙可否: 不明";
+    const unknownLabel =
+      venue.category === "workspace"
+        ? "作業環境: 不明"
+        : venue.category === "laundry" || venue.category === "gym"
+          ? "設備情報: 不明"
+          : "喫煙可否: 不明";
     const reviewUrl = `https://search.google.com/local/writereview?placeid=${venue.google_place_id}`;
     infoWindowRef.current?.setContent(
       `<div style="font-family: sans-serif; max-width: 220px;">
@@ -397,7 +490,7 @@ export default function VenueExplorer({
         </a>
       )}
       <div className="flex flex-wrap gap-2 border-b border-gray-200 bg-white px-4 py-3">
-        {(category === "smoking" ? SMOKING_FILTERS : category === "workspace" ? WORKSPACE_FILTERS : []).map(
+        {(CATEGORY_FILTERS[category] ?? []).map(
           (filter) => {
             const active = activeFilters.has(filter.key);
             return (
@@ -457,6 +550,8 @@ export default function VenueExplorer({
               const metadata = venue.metadata;
               const isSmoking = isSmokingMetadata(metadata);
               const isWorkspace = isWorkspaceMetadata(metadata);
+              const isLaundry = isLaundryMetadata(metadata);
+              const isGym = isGymMetadata(metadata);
               const proof = textProofOf(metadata);
               const proofUnknown = proof !== null && isUnknownProof(proof);
               const showAshtrayAffiliate = isSmoking && metadata.has_outdoor_ashtray;
@@ -531,6 +626,54 @@ export default function VenueExplorer({
                         </span>
                       </div>
                     )}
+                    {isLaundry && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {metadata.has_24h && (
+                          <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                            🕐24時間
+                          </span>
+                        )}
+                        {metadata.has_large_machine && (
+                          <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                            🧺大型機
+                          </span>
+                        )}
+                        {metadata.has_cashless_payment && (
+                          <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                            💳キャッシュレス
+                          </span>
+                        )}
+                        {metadata.has_wifi && (
+                          <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                            📶WIFI
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {isGym && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {metadata.has_24h && (
+                          <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                            🕐24時間
+                          </span>
+                        )}
+                        {metadata.has_dropin && (
+                          <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                            🎫都度利用可
+                          </span>
+                        )}
+                        {metadata.has_shower && (
+                          <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                            🚿シャワー
+                          </span>
+                        )}
+                        {metadata.has_parking && (
+                          <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                            🅿️駐車場
+                          </span>
+                        )}
+                      </div>
+                    )}
                     {proof && !proofUnknown && (
                       <blockquote className="mt-2 rounded border-l-4 border-indigo-300 bg-gray-50 p-2 text-xs italic text-gray-700">
                         “{proof}”
@@ -544,7 +687,11 @@ export default function VenueExplorer({
                     <div className="-mt-1 px-5 pb-3">
                       <div className="rounded border-l-4 border-gray-300 bg-gray-50 p-2 text-xs text-gray-600">
                         <span className="font-medium">
-                          {isWorkspace ? "作業環境: 不明" : "喫煙可否: 不明"}
+                          {isWorkspace
+                            ? "作業環境: 不明"
+                            : isLaundry || isGym
+                              ? "設備情報: 不明"
+                              : "喫煙可否: 不明"}
                         </span>
                         <p className="mt-1">
                           口コミからは確認できませんでした。ご存知の方は
@@ -644,6 +791,42 @@ export default function VenueExplorer({
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="h-2.5 w-2.5 rounded-full bg-yellow-500" />電源/有線LANのみ
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-gray-400" />情報なし
+                </span>
+              </div>
+            </div>
+          )}
+          {category === "laundry" && (
+            <div className="absolute bottom-4 left-4 z-10 rounded-lg bg-white/95 px-3 py-2 text-xs text-gray-700 shadow-md backdrop-blur">
+              <div className="flex flex-wrap gap-x-3 gap-y-1">
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-green-500" />24時間+大型機
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />24時間のみ
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-yellow-500" />大型機/決済のみ
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-gray-400" />情報なし
+                </span>
+              </div>
+            </div>
+          )}
+          {category === "gym" && (
+            <div className="absolute bottom-4 left-4 z-10 rounded-lg bg-white/95 px-3 py-2 text-xs text-gray-700 shadow-md backdrop-blur">
+              <div className="flex flex-wrap gap-x-3 gap-y-1">
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-green-500" />24時間+都度利用可
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />都度利用可のみ
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-yellow-500" />24時間/シャワーのみ
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="h-2.5 w-2.5 rounded-full bg-gray-400" />情報なし

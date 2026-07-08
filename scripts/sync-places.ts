@@ -2,7 +2,7 @@
  * 指定した市町村のローカルデータを収集し、口コミをClaudeで解析してSupabaseへ保存するスタンドアロンスクリプト。
  *
  * 使い方:
- *   npx tsx scripts/sync-places.ts <市町村名> <smoking|workspace>
+ *   npx tsx scripts/sync-places.ts <市町村名> <smoking|workspace|laundry|gym>
  *   例) npx tsx scripts/sync-places.ts 静岡市 smoking
  *
  * 必要な環境変数（.env.local から読み込む。CI等では事前にexportしておけばよい）:
@@ -15,6 +15,8 @@ import {
   type VenueCategory,
   type SmokingMetadata,
   type WorkspaceMetadata,
+  type LaundryMetadata,
+  type GymMetadata,
   type OpeningHours,
 } from "@/lib/types";
 
@@ -35,7 +37,7 @@ const MAX_PLACES_PER_RUN = 40;
 // Google Places / Anthropic への同時リクエスト数上限。
 const CONCURRENCY = 4;
 
-type SyncableCategory = Extract<VenueCategory, "smoking" | "workspace">;
+type SyncableCategory = Extract<VenueCategory, "smoking" | "workspace" | "laundry" | "gym">;
 
 // includedTypeを省略した場合はGoogle Places Text Searchのtypeフィルタをかけず、
 // textQueryだけで検索する（「有料自習室」のようにGoogle Places側に専用typeが存在しない業態向け）。
@@ -56,6 +58,11 @@ const CATEGORY_QUERIES: Record<SyncableCategory, PlaceQuerySpec[]> = {
     { includedType: "coworking_space", queryLabel: "コワーキングスペース" },
     { includedType: "library", queryLabel: "図書館" },
     { queryLabel: "有料自習室" },
+  ],
+  laundry: [{ includedType: "laundry", queryLabel: "コインランドリー" }],
+  gym: [
+    { includedType: "gym", queryLabel: "ジム" },
+    { includedType: "fitness_center", queryLabel: "フィットネスクラブ" },
   ],
 };
 
@@ -131,9 +138,74 @@ const WORKSPACE_ANALYSIS_CONFIG: AnalysisConfig<WorkspaceMetadata> = {
   },
 };
 
-const ANALYSIS_CONFIG: Record<SyncableCategory, AnalysisConfig<SmokingMetadata | WorkspaceMetadata>> = {
+const LAUNDRY_ANALYSIS_CONFIG: AnalysisConfig<LaundryMetadata> = {
+  systemPrompt:
+    "提供されたこの施設のユーザー口コミを分析してください。このコインランドリーの設備を判定し、以下のブーリアン（真偽値）フラグを持つ構造化されたJSONオブジェクトとして出力してください：\n" +
+    "- has_24h (24時間営業・24時間利用可能との記載があればtrue、無ければfalse)\n" +
+    "- has_large_machine (布団・毛布等が洗える大型洗濯機/乾燥機があるとの記載があればtrue、無ければfalse)\n" +
+    "- has_cashless_payment (電子マネー・QRコード決済・クレジットカード等キャッシュレス対応との記載があればtrue、現金（コイン）のみ、または記載が無ければfalse)\n" +
+    "- has_wifi (Wi-Fiが利用できるとの記載があればtrue、無ければfalse)\n" +
+    "- text_proof (クチコミ内から、この状態を裏付ける具体的な日本語の一文をそのまま抽出してください)",
+  toolName: "report_laundry_analysis",
+  toolDescription: "口コミの分析結果を構造化されたフラグとして報告する。",
+  inputSchema: {
+    type: "object",
+    properties: {
+      has_24h: { type: "boolean" },
+      has_large_machine: { type: "boolean" },
+      has_cashless_payment: { type: "boolean" },
+      has_wifi: { type: "boolean" },
+      text_proof: { type: "string" },
+    },
+    required: ["has_24h", "has_large_machine", "has_cashless_payment", "has_wifi", "text_proof"],
+  },
+  fallback: {
+    has_24h: false,
+    has_large_machine: false,
+    has_cashless_payment: false,
+    has_wifi: false,
+    text_proof: "口コミに設備に関する記載なし",
+  },
+};
+
+const GYM_ANALYSIS_CONFIG: AnalysisConfig<GymMetadata> = {
+  systemPrompt:
+    "提供されたこの施設のユーザー口コミを分析してください。このジムの利用条件・設備を判定し、以下のブーリアン（真偽値）フラグを持つ構造化されたJSONオブジェクトとして出力してください：\n" +
+    "- has_24h (24時間営業・24時間利用可能との記載があればtrue、無ければfalse)\n" +
+    "- has_dropin (会員登録なしの都度利用・ビジター利用・ドロップインができるとの記載があればtrue、会員限定、または記載が無ければfalse)\n" +
+    "- has_shower (シャワー設備があるとの記載があればtrue、無ければfalse)\n" +
+    "- has_parking (駐車場があるとの記載があればtrue、無ければfalse)\n" +
+    "- text_proof (クチコミ内から、この状態を裏付ける具体的な日本語の一文をそのまま抽出してください)",
+  toolName: "report_gym_analysis",
+  toolDescription: "口コミの分析結果を構造化されたフラグとして報告する。",
+  inputSchema: {
+    type: "object",
+    properties: {
+      has_24h: { type: "boolean" },
+      has_dropin: { type: "boolean" },
+      has_shower: { type: "boolean" },
+      has_parking: { type: "boolean" },
+      text_proof: { type: "string" },
+    },
+    required: ["has_24h", "has_dropin", "has_shower", "has_parking", "text_proof"],
+  },
+  fallback: {
+    has_24h: false,
+    has_dropin: false,
+    has_shower: false,
+    has_parking: false,
+    text_proof: "口コミに利用条件・設備に関する記載なし",
+  },
+};
+
+const ANALYSIS_CONFIG: Record<
+  SyncableCategory,
+  AnalysisConfig<SmokingMetadata | WorkspaceMetadata | LaundryMetadata | GymMetadata>
+> = {
   smoking: SMOKING_ANALYSIS_CONFIG,
   workspace: WORKSPACE_ANALYSIS_CONFIG,
+  laundry: LAUNDRY_ANALYSIS_CONFIG,
+  gym: GYM_ANALYSIS_CONFIG,
 };
 
 interface PlaceSearchResult {
@@ -362,7 +434,7 @@ async function main() {
 
   if (!city || !categoryArg) {
     console.error(
-      "使い方: npx tsx scripts/sync-places.ts <市町村名> <smoking|workspace>"
+      "使い方: npx tsx scripts/sync-places.ts <市町村名> <smoking|workspace|laundry|gym>"
     );
     process.exitCode = 1;
     return;

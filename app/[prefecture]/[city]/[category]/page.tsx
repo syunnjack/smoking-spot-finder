@@ -7,6 +7,8 @@ import {
   isVenueCategory,
   isSmokingMetadata,
   isWorkspaceMetadata,
+  isLaundryMetadata,
+  isGymMetadata,
   parseVenueMetadata,
   buildOpeningHoursSpecification,
   type Venue,
@@ -200,6 +202,60 @@ function buildFaqItems(category: VenueCategory, city: string, venues: Venue[]) {
     ];
   }
 
+  if (category === "laundry") {
+    const h24Names = namesMatching(venues, isLaundryMetadata, (m) => m.has_24h);
+    const largeMachineNames = namesMatching(venues, isLaundryMetadata, (m) => m.has_large_machine);
+    const cashlessNames = namesMatching(venues, isLaundryMetadata, (m) => m.has_cashless_payment);
+
+    return [
+      faqEntry(
+        `${city}で24時間営業のコインランドリーはどこですか？`,
+        h24Names
+          ? `${city}周辺で24時間営業・利用可能と口コミから確認されているコインランドリーには${h24Names}があります。`
+          : `${city}周辺では現時点で24時間営業が確認できるコインランドリーの情報が登録されていません。`
+      ),
+      faqEntry(
+        `${city}で布団や毛布が洗える大型洗濯機のあるコインランドリーはありますか？`,
+        largeMachineNames
+          ? `${largeMachineNames}などが、口コミから大型洗濯機・乾燥機の設置が確認されています。`
+          : `${city}周辺で大型洗濯機の設置が確認できるコインランドリーは現時点で登録されていません。`
+      ),
+      faqEntry(
+        `${city}でキャッシュレス決済ができるコインランドリーはどこですか？`,
+        cashlessNames
+          ? `${cashlessNames}などは、口コミから電子マネー等キャッシュレス決済への対応が確認されています。`
+          : `${city}周辺でキャッシュレス決済が確認できるコインランドリーは現時点で登録されていません。`
+      ),
+    ];
+  }
+
+  if (category === "gym") {
+    const h24Names = namesMatching(venues, isGymMetadata, (m) => m.has_24h);
+    const dropinNames = namesMatching(venues, isGymMetadata, (m) => m.has_dropin);
+    const showerNames = namesMatching(venues, isGymMetadata, (m) => m.has_shower);
+
+    return [
+      faqEntry(
+        `${city}で24時間営業のジムはどこですか？`,
+        h24Names
+          ? `${city}周辺で24時間営業・利用可能と口コミから確認されているジムには${h24Names}があります。`
+          : `${city}周辺では現時点で24時間営業が確認できるジムの情報が登録されていません。`
+      ),
+      faqEntry(
+        `${city}で会員登録なしで都度利用できるジムはありますか？`,
+        dropinNames
+          ? `${dropinNames}などが、口コミからビジター利用・都度利用が可能と確認されています。`
+          : `${city}周辺で都度利用が確認できるジムは現時点で登録されていません。`
+      ),
+      faqEntry(
+        `${city}でシャワー設備のあるジムはどこですか？`,
+        showerNames
+          ? `${showerNames}などは、口コミからシャワー設備の設置が確認されています。`
+          : `${city}周辺でシャワー設備が確認できるジムは現時点で登録されていません。`
+      ),
+    ];
+  }
+
   const names = venues.slice(0, 5).map((v) => v.name);
   return [
     faqEntry(
@@ -209,6 +265,49 @@ function buildFaqItems(category: VenueCategory, city: string, venues: Venue[]) {
         : `${city}周辺では現時点で${label}の情報が登録されていません。`
     ),
   ];
+}
+
+function buildAmenityFeature(category: VenueCategory, metadata: Record<string, unknown>) {
+  if (category === "smoking" && isSmokingMetadata(metadata)) {
+    return [
+      { "@type": "LocationFeatureSpecification", name: "紙タバコ喫煙可", value: metadata.allows_paper_cigarettes },
+      {
+        "@type": "LocationFeatureSpecification",
+        name: "電子タバコ専用スペース",
+        value: metadata.allows_electronic_cigarettes_only,
+      },
+      { "@type": "LocationFeatureSpecification", name: "店外灰皿あり", value: metadata.has_outdoor_ashtray },
+    ];
+  }
+  if (category === "workspace" && isWorkspaceMetadata(metadata)) {
+    return [
+      { "@type": "LocationFeatureSpecification", name: "電源あり", value: metadata.has_power_outlet },
+      { "@type": "LocationFeatureSpecification", name: "WIFIあり", value: metadata.has_wifi },
+      { "@type": "LocationFeatureSpecification", name: "有線LANあり", value: metadata.has_wired_lan },
+      { "@type": "LocationFeatureSpecification", name: "利用料あり", value: metadata.has_usage_fee },
+    ];
+  }
+  if (category === "laundry" && isLaundryMetadata(metadata)) {
+    return [
+      { "@type": "LocationFeatureSpecification", name: "24時間営業", value: metadata.has_24h },
+      { "@type": "LocationFeatureSpecification", name: "大型洗濯機/乾燥機あり", value: metadata.has_large_machine },
+      {
+        "@type": "LocationFeatureSpecification",
+        name: "キャッシュレス対応",
+        value: metadata.has_cashless_payment,
+      },
+      { "@type": "LocationFeatureSpecification", name: "WIFIあり", value: metadata.has_wifi },
+    ];
+  }
+  if (category === "gym" && isGymMetadata(metadata)) {
+    return [
+      { "@type": "LocationFeatureSpecification", name: "24時間営業", value: metadata.has_24h },
+      { "@type": "LocationFeatureSpecification", name: "都度利用可", value: metadata.has_dropin },
+      { "@type": "LocationFeatureSpecification", name: "シャワーあり", value: metadata.has_shower },
+      { "@type": "LocationFeatureSpecification", name: "駐車場あり", value: metadata.has_parking },
+    ];
+  }
+  return undefined;
 }
 
 function buildJsonLd(params: {
@@ -224,49 +323,7 @@ function buildJsonLd(params: {
 
   const localBusinesses = venues.map((venue) => {
     const metadata = venue.metadata;
-    const amenityFeature =
-      category === "smoking" && isSmokingMetadata(metadata)
-        ? [
-            {
-              "@type": "LocationFeatureSpecification",
-              name: "紙タバコ喫煙可",
-              value: metadata.allows_paper_cigarettes,
-            },
-            {
-              "@type": "LocationFeatureSpecification",
-              name: "電子タバコ専用スペース",
-              value: metadata.allows_electronic_cigarettes_only,
-            },
-            {
-              "@type": "LocationFeatureSpecification",
-              name: "店外灰皿あり",
-              value: metadata.has_outdoor_ashtray,
-            },
-          ]
-        : category === "workspace" && isWorkspaceMetadata(metadata)
-          ? [
-              {
-                "@type": "LocationFeatureSpecification",
-                name: "電源あり",
-                value: metadata.has_power_outlet,
-              },
-              {
-                "@type": "LocationFeatureSpecification",
-                name: "WIFIあり",
-                value: metadata.has_wifi,
-              },
-              {
-                "@type": "LocationFeatureSpecification",
-                name: "有線LANあり",
-                value: metadata.has_wired_lan,
-              },
-              {
-                "@type": "LocationFeatureSpecification",
-                name: "利用料あり",
-                value: metadata.has_usage_fee,
-              },
-            ]
-          : undefined;
+    const amenityFeature = buildAmenityFeature(category, metadata);
 
     return {
       "@type": "LocalBusiness",
