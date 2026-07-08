@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getSupabaseServerClient } from "@/lib/supabaseClient";
 import { isGymMetadata, parseVenueMetadata } from "@/lib/types";
+import { BROOKS_URL, BROOKS_PIXEL } from "@/lib/affiliateLinks";
+import PrBanner from "@/app/PrBanner";
 import RankingCrossLinks from "@/app/RankingCrossLinks";
 
 // 5分間はエッジキャッシュから返し、毎回全件集計をやり直さない（画面遷移の高速化）。
@@ -133,6 +135,16 @@ export default async function GymRankingPage() {
           ))}
         </ol>
       )}
+
+      <PrBanner
+        items={[
+          {
+            href: BROOKS_URL,
+            pixelSrc: BROOKS_PIXEL,
+            label: "アメリカでシェアNO.1のランニングシューズブランド「BROOKS」公式ストアをチェック",
+          },
+        ]}
+      />
     </div>
   );
 }

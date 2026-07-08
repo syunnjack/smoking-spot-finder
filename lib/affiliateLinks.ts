@@ -19,3 +19,16 @@ export const WIFIGO_URL = "https://px.a8.net/svt/ejp?a8mat=4B7VL2+47VSAA+2W74+HV
 export const WIFIGO_PIXEL = "https://www18.a8.net/0.gif?a8mat=4B7VL2+47VSAA+2W74+HVFKY";
 export const ONSUKU_URL = "https://px.a8.net/svt/ejp?a8mat=3NGUTC+EZGW0I+408S+60H7M";
 export const ONSUKU_PIXEL = "https://www19.a8.net/0.gif?a8mat=3NGUTC+EZGW0I+408S+60H7M";
+
+// A8.net経由のアフィリエイト（gymカテゴリ向け。BROOKS公式オンラインストア）。
+export const BROOKS_URL = "https://px.a8.net/svt/ejp?a8mat=4B7VL7+16C0Z6+5GZE+BWVTE";
+export const BROOKS_PIXEL = "https://www16.a8.net/0.gif?a8mat=4B7VL7+16C0Z6+5GZE+BWVTE";
+
+// A8.net経由のアフィリエイト（laundryカテゴリ向け。詰め込み放題型の宅配クリーニング「Loop Laundry」）。
+export const LOOP_LAUNDRY_URL = "https://px.a8.net/svt/ejp?a8mat=4B7VL7+1FUYNM+5L4A+5YJRM";
+export const LOOP_LAUNDRY_PIXEL = "https://www16.a8.net/0.gif?a8mat=4B7VL7+1FUYNM+5L4A+5YJRM";
+
+// A8.net経由のアフィリエイト（saunaカテゴリ向け。プライベートサウナ付き施設も探せる
+// グランピング予約サイト「リゾートグランピングドットコム」）。
+export const GLAMPING_URL = "https://px.a8.net/svt/ejp?a8mat=4B7VL7+1TJXKI+5Q4K+5YJRM";
+export const GLAMPING_PIXEL = "https://www13.a8.net/0.gif?a8mat=4B7VL7+1TJXKI+5Q4K+5YJRM";

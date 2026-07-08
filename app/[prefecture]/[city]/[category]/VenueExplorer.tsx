@@ -23,6 +23,12 @@ import {
   WIFIGO_PIXEL,
   ONSUKU_URL,
   ONSUKU_PIXEL,
+  BROOKS_URL,
+  BROOKS_PIXEL,
+  LOOP_LAUNDRY_URL,
+  LOOP_LAUNDRY_PIXEL,
+  GLAMPING_URL,
+  GLAMPING_PIXEL,
 } from "@/lib/affiliateLinks";
 
 // アフィリエイト導線。
@@ -614,6 +620,12 @@ export default function VenueExplorer({
               const isStudyVenue =
                 venue.category === "workspace" &&
                 (venue.name.includes("図書館") || venue.name.includes("自習室"));
+              // ジム利用者全般に刺さる汎用商材のため、店舗の設備条件は問わない。
+              const showBrooksAffiliate = isGym;
+              // 大型機が無い店舗は布団・毛布を持ち込みにくいため、宅配クリーニングの代替提案が刺さる。
+              const showLoopLaundryAffiliate = isLaundry && metadata.has_large_machine === false;
+              // サウナ好き全般に刺さる汎用商材（プライベートサウナ付きグランピングも検索可能）。
+              const showGlampingAffiliate = isSauna;
               return (
                 <li key={venue.id} className="relative">
                   <button
@@ -783,7 +795,10 @@ export default function VenueExplorer({
                     tabelogLink ||
                     showVapeAffiliate ||
                     showWifiGoAffiliate ||
-                    isStudyVenue) && (
+                    isStudyVenue ||
+                    showBrooksAffiliate ||
+                    showLoopLaundryAffiliate ||
+                    showGlampingAffiliate) && (
                     <div className="-mt-1 flex flex-col gap-2 px-5 pb-3">
                       {showAshtrayAffiliate && (
                         <AffiliateSlot
@@ -821,6 +836,27 @@ export default function VenueExplorer({
                           href={ONSUKU_URL}
                           pixelSrc={ONSUKU_PIXEL}
                           label="ここでの勉強、資格取得にもつなげてみる？スキマ時間で70講座以上が学び放題「オンスク.JP」"
+                        />
+                      )}
+                      {showBrooksAffiliate && (
+                        <AffiliateSlot
+                          href={BROOKS_URL}
+                          pixelSrc={BROOKS_PIXEL}
+                          label="アメリカでシェアNO.1のランニングシューズブランド「BROOKS」公式ストアをチェック"
+                        />
+                      )}
+                      {showLoopLaundryAffiliate && (
+                        <AffiliateSlot
+                          href={LOOP_LAUNDRY_URL}
+                          pixelSrc={LOOP_LAUNDRY_PIXEL}
+                          label="この店舗は大型機なし。詰め込み放題の宅配クリーニング「Loop Laundry」も検討してみる？"
+                        />
+                      )}
+                      {showGlampingAffiliate && (
+                        <AffiliateSlot
+                          href={GLAMPING_URL}
+                          pixelSrc={GLAMPING_PIXEL}
+                          label="プライベートサウナ付きグランピングも検索できる「リゾートグランピングドットコム」をチェック"
                         />
                       )}
                     </div>

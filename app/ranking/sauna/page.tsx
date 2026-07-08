@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getSupabaseServerClient } from "@/lib/supabaseClient";
 import { isSaunaMetadata, parseVenueMetadata } from "@/lib/types";
+import { GLAMPING_URL, GLAMPING_PIXEL } from "@/lib/affiliateLinks";
+import PrBanner from "@/app/PrBanner";
 import RankingCrossLinks from "@/app/RankingCrossLinks";
 
 // 5分間はエッジキャッシュから返し、毎回全件集計をやり直さない（画面遷移の高速化）。
@@ -133,6 +135,16 @@ export default async function SaunaRankingPage() {
           ))}
         </ol>
       )}
+
+      <PrBanner
+        items={[
+          {
+            href: GLAMPING_URL,
+            pixelSrc: GLAMPING_PIXEL,
+            label: "プライベートサウナ付きグランピングも検索できる「リゾートグランピングドットコム」をチェック",
+          },
+        ]}
+      />
     </div>
   );
 }

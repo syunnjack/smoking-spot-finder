@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getSupabaseServerClient } from "@/lib/supabaseClient";
 import { isLaundryMetadata, parseVenueMetadata } from "@/lib/types";
+import { WIFIGO_URL, WIFIGO_PIXEL, LOOP_LAUNDRY_URL, LOOP_LAUNDRY_PIXEL } from "@/lib/affiliateLinks";
+import PrBanner from "@/app/PrBanner";
 import RankingCrossLinks from "@/app/RankingCrossLinks";
 
 // 5分間はエッジキャッシュから返し、毎回全件集計をやり直さない（画面遷移の高速化）。
@@ -133,6 +135,21 @@ export default async function LaundryRankingPage() {
           ))}
         </ol>
       )}
+
+      <PrBanner
+        items={[
+          {
+            href: WIFIGO_URL,
+            pixelSrc: WIFIGO_PIXEL,
+            label: "洗濯中の待ち時間に。1日180円〜のポケットWiFiレンタル「WiFiGO!」をチェック",
+          },
+          {
+            href: LOOP_LAUNDRY_URL,
+            pixelSrc: LOOP_LAUNDRY_PIXEL,
+            label: "詰め込み放題の宅配クリーニング「Loop Laundry」もチェック",
+          },
+        ]}
+      />
     </div>
   );
 }
