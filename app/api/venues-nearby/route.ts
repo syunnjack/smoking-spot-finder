@@ -10,6 +10,7 @@ const DEFAULT_RADIUS_METERS: Record<string, number> = {
   workspace: 3000,
   laundry: 2000,
   gym: 3000,
+  sauna: 5000,
 };
 
 function toRad(deg: number): number {

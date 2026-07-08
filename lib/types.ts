@@ -102,6 +102,7 @@ export const VENUE_CATEGORIES = [
   "workspace",
   "laundry",
   "gym",
+  "sauna",
 ] as const;
 
 export type VenueCategory = (typeof VENUE_CATEGORIES)[number];
@@ -162,6 +163,7 @@ export const CATEGORY_LABELS: Record<VenueCategory, string> = {
   workspace: "作業・勉強できる場所",
   laundry: "コインランドリー",
   gym: "ジム",
+  sauna: "サウナ・温浴施設",
 };
 
 // scripts/sync-places.ts がClaudeの解析結果として venues.metadata に保存する構造。
@@ -310,6 +312,29 @@ export function isGymMetadata(value: unknown): value is GymMetadata {
     typeof v.has_dropin === "boolean" &&
     typeof v.has_shower === "boolean" &&
     typeof v.has_parking === "boolean" &&
+    typeof v.text_proof === "string"
+  );
+}
+
+// scripts/sync-places.ts が sauna カテゴリ（サウナ専門店・スーパー銭湯・岩盤浴施設を統合したジャンル）で
+// venues.metadata に保存する構造。スーパー銭湯はサウナ・水風呂・岩盤浴を同一施設内に併設していることが
+// 多く、Google Places側にも「岩盤浴」専用のtypeが存在しないため、ジャンルは分けず設備フラグで区別する。
+export interface SaunaMetadata {
+  has_sauna: boolean;
+  has_cold_bath: boolean;
+  has_ganban_yoku: boolean;
+  has_outdoor_bath: boolean;
+  text_proof: string;
+}
+
+export function isSaunaMetadata(value: unknown): value is SaunaMetadata {
+  if (!value || typeof value !== "object") return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.has_sauna === "boolean" &&
+    typeof v.has_cold_bath === "boolean" &&
+    typeof v.has_ganban_yoku === "boolean" &&
+    typeof v.has_outdoor_bath === "boolean" &&
     typeof v.text_proof === "string"
   );
 }

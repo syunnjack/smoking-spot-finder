@@ -6,9 +6,10 @@ const RANKING_PAGES: Record<VenueCategory, { href: string; label: string }> = {
   workspace: { href: "/ranking/workspace", label: "💻 電源・WIFI充実度ランキング" },
   laundry: { href: "/ranking/laundry", label: "🧺 コインランドリー充実度ランキング" },
   gym: { href: "/ranking/gym", label: "💪 ジム充実度ランキング" },
+  sauna: { href: "/ranking/sauna", label: "🧖 サウナ充実度ランキング" },
 };
 
-// 各ランキングページの上部に置き、他3ジャンルのランキングへ相互に飛べるようにする。
+// 各ランキングページの上部に置き、他4ジャンルのランキングへ相互に飛べるようにする。
 export default function RankingCrossLinks({ current }: { current: VenueCategory }) {
   const others = (Object.keys(RANKING_PAGES) as VenueCategory[]).filter((c) => c !== current);
   return (

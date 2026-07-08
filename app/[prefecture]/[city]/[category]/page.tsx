@@ -9,6 +9,7 @@ import {
   isWorkspaceMetadata,
   isLaundryMetadata,
   isGymMetadata,
+  isSaunaMetadata,
   parseVenueMetadata,
   buildOpeningHoursSpecification,
   type Venue,
@@ -256,6 +257,33 @@ function buildFaqItems(category: VenueCategory, city: string, venues: Venue[]) {
     ];
   }
 
+  if (category === "sauna") {
+    const saunaNames = namesMatching(venues, isSaunaMetadata, (m) => m.has_sauna);
+    const coldBathNames = namesMatching(venues, isSaunaMetadata, (m) => m.has_cold_bath);
+    const ganbanYokuNames = namesMatching(venues, isSaunaMetadata, (m) => m.has_ganban_yoku);
+
+    return [
+      faqEntry(
+        `${city}でサウナがある施設はどこですか？`,
+        saunaNames
+          ? `${city}周辺でサウナがあると口コミから確認されている施設には${saunaNames}があります。`
+          : `${city}周辺では現時点でサウナの設置が確認できる施設の情報が登録されていません。`
+      ),
+      faqEntry(
+        `${city}で水風呂がある施設はありますか？`,
+        coldBathNames
+          ? `${coldBathNames}などが、口コミから水風呂の設置が確認されています。`
+          : `${city}周辺で水風呂の設置が確認できる施設は現時点で登録されていません。`
+      ),
+      faqEntry(
+        `${city}で岩盤浴ができる施設はどこですか？`,
+        ganbanYokuNames
+          ? `${ganbanYokuNames}などは、口コミから岩盤浴の設置が確認されています。`
+          : `${city}周辺で岩盤浴が確認できる施設は現時点で登録されていません。`
+      ),
+    ];
+  }
+
   const names = venues.slice(0, 5).map((v) => v.name);
   return [
     faqEntry(
@@ -305,6 +333,14 @@ function buildAmenityFeature(category: VenueCategory, metadata: Record<string, u
       { "@type": "LocationFeatureSpecification", name: "都度利用可", value: metadata.has_dropin },
       { "@type": "LocationFeatureSpecification", name: "シャワーあり", value: metadata.has_shower },
       { "@type": "LocationFeatureSpecification", name: "駐車場あり", value: metadata.has_parking },
+    ];
+  }
+  if (category === "sauna" && isSaunaMetadata(metadata)) {
+    return [
+      { "@type": "LocationFeatureSpecification", name: "サウナあり", value: metadata.has_sauna },
+      { "@type": "LocationFeatureSpecification", name: "水風呂あり", value: metadata.has_cold_bath },
+      { "@type": "LocationFeatureSpecification", name: "岩盤浴あり", value: metadata.has_ganban_yoku },
+      { "@type": "LocationFeatureSpecification", name: "露天風呂あり", value: metadata.has_outdoor_bath },
     ];
   }
   return undefined;

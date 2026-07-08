@@ -63,6 +63,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${baseUrl}/ranking/workspace`, changeFrequency: "daily", priority: 0.9 },
     { url: `${baseUrl}/ranking/laundry`, changeFrequency: "daily", priority: 0.9 },
     { url: `${baseUrl}/ranking/gym`, changeFrequency: "daily", priority: 0.9 },
+    { url: `${baseUrl}/ranking/sauna`, changeFrequency: "daily", priority: 0.9 },
     { url: `${baseUrl}/smoking`, changeFrequency: "weekly", priority: 0.5 },
   ];
 

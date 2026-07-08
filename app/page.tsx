@@ -61,11 +61,12 @@ async function fetchAreas(category: VenueCategory): Promise<Area[]> {
 }
 
 export default async function Home() {
-  const [smokingAreas, workspaceAreas, laundryAreas, gymAreas] = await Promise.all([
+  const [smokingAreas, workspaceAreas, laundryAreas, gymAreas, saunaAreas] = await Promise.all([
     fetchAreas("smoking"),
     fetchAreas("workspace"),
     fetchAreas("laundry"),
     fetchAreas("gym"),
+    fetchAreas("sauna"),
   ]);
   return (
     // HomeClientはヘッダーの「/?genre=workspace」リンクを読むためuseSearchParamsを使う。
@@ -76,6 +77,7 @@ export default async function Home() {
         workspaceAreas={workspaceAreas}
         laundryAreas={laundryAreas}
         gymAreas={gymAreas}
+        saunaAreas={saunaAreas}
         apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
       />
     </Suspense>

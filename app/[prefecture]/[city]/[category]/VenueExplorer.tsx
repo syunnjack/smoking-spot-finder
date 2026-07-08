@@ -9,6 +9,7 @@ import {
   isWorkspaceMetadata,
   isLaundryMetadata,
   isGymMetadata,
+  isSaunaMetadata,
   isUnknownProof,
   looksLikeConvenienceStore,
 } from "@/lib/types";
@@ -242,7 +243,41 @@ const GYM_FILTERS: Array<{
   },
 ];
 
-type FilterKey = SmokingFilterKey | WorkspaceFilterKey | LaundryFilterKey | GymFilterKey;
+type SaunaFilterKey = "has_sauna" | "cold_bath" | "ganban_yoku" | "outdoor_bath";
+
+const SAUNA_FILTERS: Array<{
+  key: SaunaFilterKey;
+  label: string;
+  matches: (metadata: Record<string, unknown>) => boolean;
+}> = [
+  {
+    key: "has_sauna",
+    label: "サウナあり",
+    matches: (m) => isSaunaMetadata(m) && m.has_sauna,
+  },
+  {
+    key: "cold_bath",
+    label: "水風呂あり",
+    matches: (m) => isSaunaMetadata(m) && m.has_cold_bath,
+  },
+  {
+    key: "ganban_yoku",
+    label: "岩盤浴あり",
+    matches: (m) => isSaunaMetadata(m) && m.has_ganban_yoku,
+  },
+  {
+    key: "outdoor_bath",
+    label: "露天風呂あり",
+    matches: (m) => isSaunaMetadata(m) && m.has_outdoor_bath,
+  },
+];
+
+type FilterKey =
+  | SmokingFilterKey
+  | WorkspaceFilterKey
+  | LaundryFilterKey
+  | GymFilterKey
+  | SaunaFilterKey;
 
 const CATEGORY_FILTERS: Partial<
   Record<
@@ -254,6 +289,7 @@ const CATEGORY_FILTERS: Partial<
   workspace: WORKSPACE_FILTERS,
   laundry: LAUNDRY_FILTERS,
   gym: GYM_FILTERS,
+  sauna: SAUNA_FILTERS,
 };
 
 // Claudeが口コミから根拠を見つけられなかった場合に "<UNKNOWN>" 等のプレースホルダーを
@@ -281,6 +317,13 @@ function markerColorFor(venue: Venue): string {
     if (metadata.has_24h || metadata.has_shower) return MARKER_COLORS.ashtray;
     return MARKER_COLORS.none;
   }
+  if (venue.category === "sauna") {
+    if (!isSaunaMetadata(metadata)) return MARKER_COLORS.none;
+    if (metadata.has_sauna && metadata.has_cold_bath) return MARKER_COLORS.paper;
+    if (metadata.has_sauna) return MARKER_COLORS.electronic;
+    if (metadata.has_ganban_yoku || metadata.has_outdoor_bath) return MARKER_COLORS.ashtray;
+    return MARKER_COLORS.none;
+  }
   if (!isSmokingMetadata(metadata)) return MARKER_COLORS.none;
   if (metadata.allows_paper_cigarettes) return MARKER_COLORS.paper;
   if (metadata.allows_electronic_cigarettes_only) return MARKER_COLORS.electronic;
@@ -288,13 +331,13 @@ function markerColorFor(venue: Venue): string {
   return MARKER_COLORS.none;
 }
 
-// smoking/workspace/laundry/gymいずれのmetadataもtext_proofフィールドを持つため、
-// カテゴリを問わず取り出せる。
+// 全カテゴリのmetadataがtext_proofフィールドを持つため、カテゴリを問わず取り出せる。
 function textProofOf(metadata: Record<string, unknown>): string | null {
   if (isSmokingMetadata(metadata)) return metadata.text_proof;
   if (isWorkspaceMetadata(metadata)) return metadata.text_proof;
   if (isLaundryMetadata(metadata)) return metadata.text_proof;
   if (isGymMetadata(metadata)) return metadata.text_proof;
+  if (isSaunaMetadata(metadata)) return metadata.text_proof;
   return null;
 }
 
@@ -423,7 +466,7 @@ export default function VenueExplorer({
     const unknownLabel =
       venue.category === "workspace"
         ? "作業環境: 不明"
-        : venue.category === "laundry" || venue.category === "gym"
+        : venue.category === "laundry" || venue.category === "gym" || venue.category === "sauna"
           ? "設備情報: 不明"
           : "喫煙可否: 不明";
     const reviewUrl = `https://search.google.com/local/writereview?placeid=${venue.google_place_id}`;
@@ -552,6 +595,7 @@ export default function VenueExplorer({
               const isWorkspace = isWorkspaceMetadata(metadata);
               const isLaundry = isLaundryMetadata(metadata);
               const isGym = isGymMetadata(metadata);
+              const isSauna = isSaunaMetadata(metadata);
               const proof = textProofOf(metadata);
               const proofUnknown = proof !== null && isUnknownProof(proof);
               const showAshtrayAffiliate = isSmoking && metadata.has_outdoor_ashtray;
@@ -677,6 +721,30 @@ export default function VenueExplorer({
                         )}
                       </div>
                     )}
+                    {isSauna && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {metadata.has_sauna && (
+                          <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                            🧖サウナ
+                          </span>
+                        )}
+                        {metadata.has_cold_bath && (
+                          <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                            🧊水風呂
+                          </span>
+                        )}
+                        {metadata.has_ganban_yoku && (
+                          <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                            🪨岩盤浴
+                          </span>
+                        )}
+                        {metadata.has_outdoor_bath && (
+                          <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                            ♨️露天風呂
+                          </span>
+                        )}
+                      </div>
+                    )}
                     {proof && !proofUnknown && (
                       <blockquote className="mt-2 rounded border-l-4 border-indigo-300 bg-gray-50 p-2 text-xs italic text-gray-700">
                         “{proof}”
@@ -692,7 +760,7 @@ export default function VenueExplorer({
                         <span className="font-medium">
                           {isWorkspace
                             ? "作業環境: 不明"
-                            : isLaundry || isGym
+                            : isLaundry || isGym || isSauna
                               ? "設備情報: 不明"
                               : "喫煙可否: 不明"}
                         </span>
@@ -830,6 +898,24 @@ export default function VenueExplorer({
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="h-2.5 w-2.5 rounded-full bg-yellow-500" />24時間/シャワーのみ
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-gray-400" />情報なし
+                </span>
+              </div>
+            </div>
+          )}
+          {category === "sauna" && (
+            <div className="absolute bottom-4 left-4 z-10 rounded-lg bg-white/95 px-3 py-2 text-xs text-gray-700 shadow-md backdrop-blur">
+              <div className="flex flex-wrap gap-x-3 gap-y-1">
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-green-500" />サウナ+水風呂
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />サウナのみ
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-yellow-500" />岩盤浴/露天風呂のみ
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="h-2.5 w-2.5 rounded-full bg-gray-400" />情報なし

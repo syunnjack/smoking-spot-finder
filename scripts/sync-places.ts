@@ -2,7 +2,7 @@
  * 指定した市町村のローカルデータを収集し、口コミをClaudeで解析してSupabaseへ保存するスタンドアロンスクリプト。
  *
  * 使い方:
- *   npx tsx scripts/sync-places.ts <市町村名> <smoking|workspace|laundry|gym>
+ *   npx tsx scripts/sync-places.ts <市町村名> <smoking|workspace|laundry|gym|sauna>
  *   例) npx tsx scripts/sync-places.ts 静岡市 smoking
  *
  * 必要な環境変数（.env.local から読み込む。CI等では事前にexportしておけばよい）:
@@ -17,6 +17,7 @@ import {
   type WorkspaceMetadata,
   type LaundryMetadata,
   type GymMetadata,
+  type SaunaMetadata,
   type OpeningHours,
 } from "@/lib/types";
 
@@ -37,7 +38,10 @@ const MAX_PLACES_PER_RUN = 40;
 // Google Places / Anthropic への同時リクエスト数上限。
 const CONCURRENCY = 4;
 
-type SyncableCategory = Extract<VenueCategory, "smoking" | "workspace" | "laundry" | "gym">;
+type SyncableCategory = Extract<
+  VenueCategory,
+  "smoking" | "workspace" | "laundry" | "gym" | "sauna"
+>;
 
 // includedTypeを省略した場合はGoogle Places Text Searchのtypeフィルタをかけず、
 // textQueryだけで検索する（「有料自習室」のようにGoogle Places側に専用typeが存在しない業態向け）。
@@ -63,6 +67,11 @@ const CATEGORY_QUERIES: Record<SyncableCategory, PlaceQuerySpec[]> = {
   gym: [
     { includedType: "gym", queryLabel: "ジム" },
     { includedType: "fitness_center", queryLabel: "フィットネスクラブ" },
+  ],
+  sauna: [
+    { includedType: "sauna", queryLabel: "サウナ" },
+    { includedType: "public_bath", queryLabel: "スーパー銭湯 天然温泉" },
+    { queryLabel: "岩盤浴" },
   ],
 };
 
@@ -198,13 +207,44 @@ const GYM_ANALYSIS_CONFIG: AnalysisConfig<GymMetadata> = {
   },
 };
 
+const SAUNA_ANALYSIS_CONFIG: AnalysisConfig<SaunaMetadata> = {
+  systemPrompt:
+    "提供されたこの施設のユーザー口コミを分析してください。この施設（サウナ専門店・スーパー銭湯・岩盤浴施設のいずれか）の設備を判定し、以下のブーリアン（真偽値）フラグを持つ構造化されたJSONオブジェクトとして出力してください：\n" +
+    "- has_sauna (サウナ室・ドライサウナ・スチームサウナ等があるとの記載があればtrue、無ければfalse)\n" +
+    "- has_cold_bath (水風呂があるとの記載があればtrue、無ければfalse)\n" +
+    "- has_ganban_yoku (岩盤浴があるとの記載があればtrue、無ければfalse)\n" +
+    "- has_outdoor_bath (露天風呂があるとの記載があればtrue、無ければfalse)\n" +
+    "- text_proof (クチコミ内から、この状態を裏付ける具体的な日本語の一文をそのまま抽出してください)",
+  toolName: "report_sauna_analysis",
+  toolDescription: "口コミの分析結果を構造化されたフラグとして報告する。",
+  inputSchema: {
+    type: "object",
+    properties: {
+      has_sauna: { type: "boolean" },
+      has_cold_bath: { type: "boolean" },
+      has_ganban_yoku: { type: "boolean" },
+      has_outdoor_bath: { type: "boolean" },
+      text_proof: { type: "string" },
+    },
+    required: ["has_sauna", "has_cold_bath", "has_ganban_yoku", "has_outdoor_bath", "text_proof"],
+  },
+  fallback: {
+    has_sauna: false,
+    has_cold_bath: false,
+    has_ganban_yoku: false,
+    has_outdoor_bath: false,
+    text_proof: "口コミに設備に関する記載なし",
+  },
+};
+
 const ANALYSIS_CONFIG: Record<
   SyncableCategory,
-  AnalysisConfig<SmokingMetadata | WorkspaceMetadata | LaundryMetadata | GymMetadata>
+  AnalysisConfig<SmokingMetadata | WorkspaceMetadata | LaundryMetadata | GymMetadata | SaunaMetadata>
 > = {
   smoking: SMOKING_ANALYSIS_CONFIG,
   workspace: WORKSPACE_ANALYSIS_CONFIG,
   laundry: LAUNDRY_ANALYSIS_CONFIG,
+  sauna: SAUNA_ANALYSIS_CONFIG,
   gym: GYM_ANALYSIS_CONFIG,
 };
 
@@ -424,7 +464,10 @@ async function processPlace(
     return {
       placeId: place.id,
       status: "error",
-      detail: error instanceof Error ? error.message : String(error),
+      detail:
+        error instanceof Error
+          ? error.message
+          : JSON.stringify(error, Object.getOwnPropertyNames(error as object)),
     };
   }
 }
@@ -434,7 +477,7 @@ async function main() {
 
   if (!city || !categoryArg) {
     console.error(
-      "使い方: npx tsx scripts/sync-places.ts <市町村名> <smoking|workspace|laundry|gym>"
+      "使い方: npx tsx scripts/sync-places.ts <市町村名> <smoking|workspace|laundry|gym|sauna>"
     );
     process.exitCode = 1;
     return;

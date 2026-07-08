@@ -36,6 +36,12 @@ export default function Header() {
         >
           💪 ジム
         </Link>
+        <Link
+          href="/?genre=sauna"
+          className="shrink-0 rounded-full px-2.5 py-1.5 text-gray-600 hover:bg-gray-100"
+        >
+          🧖 サウナ
+        </Link>
       </nav>
     </header>
   );

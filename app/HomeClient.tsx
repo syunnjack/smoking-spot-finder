@@ -13,10 +13,10 @@ interface Area {
   city: string;
 }
 
-type Genre = "smoking" | "workspace" | "laundry" | "gym";
+type Genre = "smoking" | "workspace" | "laundry" | "gym" | "sauna";
 type Status = "idle" | "locating" | "loading" | "ready" | "error";
 
-const GENRES: Genre[] = ["smoking", "workspace", "laundry", "gym"];
+const GENRES: Genre[] = ["smoking", "workspace", "laundry", "gym", "sauna"];
 
 const GENRE_COPY: Record<
   Genre,
@@ -66,6 +66,15 @@ const GENRE_COPY: Record<
     rankingHref: "/ranking/gym",
     rankingLabel: "🏆 ジム充実度ランキングを見る",
   },
+  sauna: {
+    label: "🧖 サウナ・温浴施設",
+    heading: "今いる場所から、一番近いサウナへ",
+    sub: "口コミをAIが解析し、サウナ・水風呂・岩盤浴・露天風呂の有無を地図に表示します。",
+    buttonIdle: "📍 現在地から一番近いサウナを探す",
+    buttonLoading: "周辺のサウナを検索中...",
+    rankingHref: "/ranking/sauna",
+    rankingLabel: "🏆 サウナ充実度ランキングを見る",
+  },
 };
 
 // 位置情報が拒否された場合、端末ごとに許可を出し直す手順が異なるため具体的に案内する。
@@ -86,12 +95,14 @@ export default function HomeClient({
   workspaceAreas,
   laundryAreas,
   gymAreas,
+  saunaAreas,
   apiKey,
 }: {
   smokingAreas: Area[];
   workspaceAreas: Area[];
   laundryAreas: Area[];
   gymAreas: Area[];
+  saunaAreas: Area[];
   apiKey: string | undefined;
 }) {
   // ヘッダーの各ジャンルリンク（/?genre=workspace 等）から来た場合に初期選択を合わせる。
@@ -195,6 +206,7 @@ export default function HomeClient({
     workspace: workspaceAreas,
     laundry: laundryAreas,
     gym: gymAreas,
+    sauna: saunaAreas,
   };
   const areas = AREAS_BY_GENRE[genre];
 
